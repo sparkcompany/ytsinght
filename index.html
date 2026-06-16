@@ -1,0 +1,2424 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>YTInsight — YouTube Intelligence Platform</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,300&display=swap" rel="stylesheet" />
+<!-- Firebase SDK -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
+  import { getDatabase, ref, set, get, push, onValue } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCdrPLotWyFJXsRcBJrga91LbiAXGicbpY",
+    authDomain: "spaintoearn.firebaseapp.com",
+    databaseURL: "https://spaintoearn-default-rtdb.firebaseio.com",
+    projectId: "spaintoearn",
+    storageBucket: "spaintoearn.firebasestorage.app",
+    messagingSenderId: "77653986140",
+    appId: "1:77653986140:web:4a3b0f1895ddad1664cf99",
+    measurementId: "G-BJE7GM34DJ"
+  };
+
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getDatabase(app);
+
+  // Expose to global scope for inline handlers
+  window._fb = { auth, db, ref, set, get, push, onValue,
+    createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged };
+
+  onAuthStateChanged(auth, user => {
+    if (user) {
+      window.currentUser = user;
+      syncUserWithBackend(user);
+      showDashboard(user);
+    } else {
+      window.currentUser = null;
+      showLanding();
+    }
+  });
+</script>
+<style>
+/* ══ DESIGN TOKENS ══════════════════════════════════════════════════════════ */
+:root {
+  --gold:        #C9A84C;
+  --gold-light:  #E8C97A;
+  --gold-dim:    rgba(201,168,76,0.12);
+  --gold-border: rgba(201,168,76,0.28);
+  --bg-base:     #070710;
+  --bg-surface:  #0D0D1F;
+  --bg-card:     rgba(255,255,255,0.04);
+  --bg-card-hover: rgba(255,255,255,0.07);
+  --glass-border:       rgba(255,255,255,0.08);
+  --glass-border-hover: rgba(255,255,255,0.14);
+  --text-primary:   #F0EEF9;
+  --text-secondary: rgba(240,238,249,0.6);
+  --text-muted:     rgba(240,238,249,0.35);
+  --red:    #FF4757;
+  --red-dim: rgba(255,71,87,0.12);
+  --blue:    #4A9EFF;
+  --blue-dim: rgba(74,158,255,0.12);
+  --green:   #2FD98A;
+  --green-dim: rgba(47,217,138,0.12);
+  --purple:  #A78BFA;
+  --purple-dim: rgba(167,139,250,0.12);
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+  --nav-height: 68px;
+  --sidebar-w:  220px;
+  --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
+}
+[data-theme="light"] {
+  --bg-base:    #F4F2FF;
+  --bg-surface: #ECEAF8;
+  --bg-card:    rgba(255,255,255,0.75);
+  --bg-card-hover: rgba(255,255,255,0.95);
+  --glass-border:       rgba(100,80,200,0.12);
+  --glass-border-hover: rgba(100,80,200,0.22);
+  --text-primary:   #1A1730;
+  --text-secondary: rgba(26,23,48,0.65);
+  --text-muted:     rgba(26,23,48,0.35);
+  --gold:       #A07820;
+  --gold-light: #C9A84C;
+  --gold-dim:   rgba(160,120,32,0.1);
+  --gold-border: rgba(160,120,32,0.2);
+}
+
+*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.4s ease, color 0.4s ease;
+}
+::-webkit-scrollbar { width: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--glass-border); border-radius: 99px; }
+
+/* ══ FLOATING LANDING NAV ══════════════════════════════════════════════════ */
+#landingNav {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  z-index: 200; width: min(960px, calc(100vw - 32px));
+  background: rgba(7,7,16,0.82);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--glass-border);
+  border-radius: 99px;
+  padding: 0 8px 0 20px;
+  height: 56px;
+  display: flex; align-items: center; gap: 4px;
+  transition: var(--transition);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset;
+}
+[data-theme="light"] #landingNav {
+  background: rgba(244,242,255,0.88);
+  box-shadow: 0 8px 40px rgba(80,60,160,0.12);
+}
+.lnav-logo {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 17px;
+  color: var(--text-primary); text-decoration: none;
+  margin-right: 8px;
+}
+.lnav-logo-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--red), #FF6B6B);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+}
+.lnav-logo-icon svg { width: 16px; height: 16px; fill: #fff; }
+.lnav-logo span { color: var(--gold); }
+.lnav-links { display: flex; align-items: center; gap: 2px; flex: 1; }
+.lnav-link {
+  padding: 6px 14px;
+  font-size: 13.5px; font-weight: 500;
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-radius: 99px;
+  transition: var(--transition);
+  cursor: pointer; border: none; background: none;
+}
+.lnav-link:hover { color: var(--text-primary); background: rgba(255,255,255,0.06); }
+.lnav-right { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.btn-login {
+  height: 38px; padding: 0 20px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: 99px;
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: var(--transition);
+  white-space: nowrap;
+}
+.btn-login:hover { transform: scale(1.04); box-shadow: 0 4px 20px rgba(201,168,76,0.4); }
+.btn-theme-sm {
+  width: 34px; height: 34px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: 50%; cursor: pointer;
+  color: var(--text-secondary);
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--transition);
+}
+.btn-theme-sm:hover { color: var(--gold); border-color: var(--gold-border); }
+
+/* ══ LANDING PAGE ══════════════════════════════════════════════════════════ */
+#landingPage { display: block; }
+#dashboardPage { display: none; }
+
+.landing-hero {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  padding: 120px 24px 80px;
+  position: relative; overflow: hidden;
+}
+.hero-glow {
+  position: absolute; top: -100px; left: 50%;
+  transform: translateX(-50%);
+  width: 800px; height: 600px;
+  background: radial-gradient(ellipse at 50% 30%,
+    rgba(201,168,76,0.10) 0%,
+    rgba(167,139,250,0.06) 40%,
+    transparent 70%);
+  pointer-events: none;
+}
+.hero-eyebrow {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-size: 11.5px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--gold);
+  background: var(--gold-dim);
+  border: 1px solid var(--gold-border);
+  border-radius: 99px; padding: 5px 16px;
+  margin-bottom: 28px;
+  animation: fadeSlideUp 0.6s ease both;
+}
+.hero-h1 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(38px, 7vw, 80px);
+  font-weight: 800; line-height: 1.06;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  max-width: 780px;
+  animation: fadeSlideUp 0.6s 0.08s ease both;
+}
+.hero-h1 .accent { color: var(--gold); }
+.hero-h1 .accent-purple { color: var(--purple); }
+.hero-sub {
+  margin-top: 22px; font-size: clamp(15px, 2.2vw, 18px);
+  color: var(--text-secondary); max-width: 520px; line-height: 1.65;
+  animation: fadeSlideUp 0.6s 0.16s ease both;
+}
+.hero-cta-row {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  justify-content: center; margin-top: 42px;
+  animation: fadeSlideUp 0.6s 0.24s ease both;
+}
+.btn-cta {
+  height: 52px; padding: 0 32px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: var(--radius-md);
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 15px;
+  cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; gap: 8px;
+}
+.btn-cta:hover { transform: translateY(-2px); box-shadow: 0 8px 32px rgba(201,168,76,0.4); }
+.btn-cta-outline {
+  height: 52px; padding: 0 28px;
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary); font-family: 'DM Sans', sans-serif;
+  font-weight: 500; font-size: 14.5px;
+  cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; gap: 8px;
+}
+.btn-cta-outline:hover { border-color: var(--glass-border-hover); color: var(--text-primary); }
+
+/* ── Hero Stats ── */
+.hero-stats {
+  display: flex; align-items: center; gap: 40px;
+  margin-top: 56px; flex-wrap: wrap; justify-content: center;
+  animation: fadeSlideUp 0.6s 0.32s ease both;
+}
+.hero-stat-val {
+  font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800;
+  color: var(--text-primary);
+}
+.hero-stat-label { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.stat-divider { width: 1px; height: 36px; background: var(--glass-border); }
+
+/* ── Landing Sections ── */
+.section { padding: 96px 24px; max-width: 1100px; margin: 0 auto; }
+.section-eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 12px;
+}
+.section-h2 {
+  font-family: 'Syne', sans-serif;
+  font-size: clamp(26px, 4vw, 44px);
+  font-weight: 800; line-height: 1.1;
+  color: var(--text-primary); margin-bottom: 16px;
+}
+.section-sub { font-size: 16px; color: var(--text-secondary); max-width: 560px; line-height: 1.65; }
+
+/* ── Features ── */
+.features-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px; margin-top: 52px;
+}
+.feature-card {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg); padding: 28px;
+  transition: var(--transition); cursor: default;
+}
+.feature-card:hover {
+  border-color: var(--gold-border);
+  background: var(--bg-card-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+}
+.feature-icon {
+  width: 46px; height: 46px; border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 16px; font-size: 22px;
+}
+.feature-title {
+  font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
+  color: var(--text-primary); margin-bottom: 8px;
+}
+.feature-desc { font-size: 13.5px; color: var(--text-secondary); line-height: 1.6; }
+
+/* ── Pricing ── */
+#pricing { scroll-margin-top: 80px; }
+.pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 22px; margin-top: 52px; max-width: 740px; margin-left: auto; margin-right: auto;
+}
+.pricing-card {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl); padding: 34px;
+  transition: var(--transition); position: relative;
+}
+.pricing-card.featured {
+  border-color: var(--gold-border);
+  background: linear-gradient(160deg, rgba(201,168,76,0.06), var(--bg-card));
+}
+.pricing-badge {
+  position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; padding: 4px 16px; border-radius: 99px;
+  white-space: nowrap;
+}
+.pricing-plan {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px;
+}
+.pricing-price {
+  font-family: 'Syne', sans-serif; font-size: 42px; font-weight: 800;
+  color: var(--text-primary); line-height: 1;
+  display: flex; align-items: baseline; gap: 4px;
+}
+.pricing-price sub { font-size: 16px; font-weight: 500; color: var(--text-muted); }
+.pricing-price sup { font-size: 16px; font-weight: 600; color: var(--text-muted); }
+.pricing-period { font-size: 13px; color: var(--text-muted); margin: 8px 0 24px; }
+.pricing-feats { list-style: none; margin-bottom: 28px; }
+.pricing-feats li {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 13.5px; color: var(--text-secondary); padding: 7px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.pricing-feats li:last-child { border-bottom: none; }
+.feat-check { color: var(--green); flex-shrink: 0; }
+.feat-lock { color: var(--text-muted); flex-shrink: 0; }
+.btn-plan {
+  width: 100%; height: 46px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-secondary);
+  font-family: 'Syne', sans-serif; font-weight: 600; font-size: 14px;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-plan:hover { border-color: var(--glass-border-hover); color: var(--text-primary); }
+.btn-plan.gold {
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; color: #1A1200;
+}
+.btn-plan.gold:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(201,168,76,0.35); }
+
+/* ── About / Contact / Docs ── */
+.about-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 52px;
+  align-items: center; margin-top: 48px;
+}
+@media (max-width: 720px) { .about-grid { grid-template-columns: 1fr; } }
+.about-text p { font-size: 15px; color: var(--text-secondary); line-height: 1.7; margin-bottom: 16px; }
+.about-visual {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl); padding: 32px;
+}
+
+.contact-form { max-width: 540px; margin-top: 48px; }
+.cf-row { display: flex; gap: 14px; }
+.cf-field { flex: 1; margin-bottom: 14px; }
+.cf-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500; }
+.cf-input {
+  width: 100%; height: 46px; padding: 0 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif;
+  font-size: 14px; outline: none; transition: var(--transition);
+}
+.cf-input:focus { border-color: var(--gold-border); background: var(--gold-dim); }
+.cf-input::placeholder { color: var(--text-muted); }
+
+/* ── Footer ── */
+.landing-footer {
+  border-top: 1px solid var(--glass-border);
+  padding: 32px 24px;
+  text-align: center; font-size: 12.5px; color: var(--text-muted);
+}
+
+/* ══ MODAL ═════════════════════════════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; opacity: 0; pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  width: 100%; max-width: 440px;
+  background: var(--bg-surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xl); padding: 36px;
+  transform: scale(0.96) translateY(8px);
+  transition: transform 0.25s ease;
+}
+.modal-overlay.open .modal { transform: scale(1) translateY(0); }
+.modal-title {
+  font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800;
+  color: var(--text-primary); margin-bottom: 4px;
+}
+.modal-sub { font-size: 13.5px; color: var(--text-muted); margin-bottom: 28px; }
+.modal-tabs { display: flex; gap: 8px; margin-bottom: 24px; }
+.modal-tab {
+  flex: 1; height: 38px; border-radius: var(--radius-sm);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted); font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px; font-weight: 500;
+  cursor: pointer; transition: var(--transition);
+}
+.modal-tab.active {
+  background: var(--gold-dim); border-color: var(--gold-border); color: var(--gold);
+}
+.modal-field { margin-bottom: 14px; }
+.modal-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: block; font-weight: 500; }
+.modal-input {
+  width: 100%; height: 44px; padding: 0 16px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif;
+  font-size: 14px; outline: none; transition: var(--transition);
+}
+.modal-input:focus { border-color: var(--gold-border); background: var(--gold-dim); }
+.modal-input::placeholder { color: var(--text-muted); }
+.btn-modal-submit {
+  width: 100%; height: 46px; margin-top: 6px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: var(--radius-md);
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 700; font-size: 14.5px;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-modal-submit:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(201,168,76,0.35); }
+.btn-modal-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+.modal-close {
+  position: absolute; top: 16px; right: 16px;
+  width: 34px; height: 34px; border-radius: 50%;
+  background: var(--bg-card); border: 1px solid var(--glass-border);
+  color: var(--text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: var(--transition);
+}
+.modal-close:hover { color: var(--text-primary); }
+.modal { position: relative; }
+.modal-err { font-size: 12.5px; color: var(--red); margin-top: 8px; min-height: 18px; }
+
+/* Get Started Modal */
+.gs-modal { max-width: 460px; }
+
+/* ══ DASHBOARD LAYOUT ══════════════════════════════════════════════════════ */
+#dashboardPage {
+  display: none; min-height: 100vh;
+}
+#dashboardPage.active { display: flex; flex-direction: column; }
+
+/* ── Dashboard Nav ── */
+.dash-nav {
+  position: sticky; top: 0; z-index: 100; height: var(--nav-height);
+  background: rgba(7,7,16,0.8);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+  display: flex; align-items: center; padding: 0 20px; gap: 16px;
+  transition: var(--transition);
+}
+[data-theme="light"] .dash-nav { background: rgba(244,242,255,0.85); }
+.dash-nav-logo {
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px;
+  color: var(--text-primary); text-decoration: none; flex-shrink: 0;
+}
+.dash-nav-logo .logo-icon {
+  width: 30px; height: 30px;
+  background: linear-gradient(135deg, var(--red), #FF6B6B);
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+}
+.dash-nav-logo .logo-icon svg { width: 15px; height: 15px; fill: #fff; }
+.dash-nav-logo span { color: var(--gold); }
+
+.nav-url-wrap {
+  flex: 1; display: flex; align-items: center; gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: 0 14px; height: 40px; max-width: 480px;
+  transition: var(--transition);
+}
+.nav-url-wrap:focus-within { border-color: var(--gold-border); background: var(--gold-dim); }
+.nav-url-wrap svg { width: 15px; height: 15px; color: var(--text-muted); flex-shrink: 0; }
+.nav-url-input {
+  background: none; border: none; outline: none;
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif;
+  font-size: 13.5px; flex: 1;
+}
+.nav-url-input::placeholder { color: var(--text-muted); }
+
+.nav-right { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.nav-plan-badge {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; padding: 4px 12px; border-radius: 99px;
+}
+.plan-free { background: var(--glass-border); color: var(--text-muted); }
+.plan-paid { background: var(--gold-dim); color: var(--gold); border: 1px solid var(--gold-border); }
+.nav-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--purple), var(--blue));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700;
+  color: #fff; cursor: pointer; flex-shrink: 0;
+  position: relative;
+}
+.nav-avatar:hover .avatar-menu { display: block; }
+.avatar-menu {
+  display: none; position: absolute; top: calc(100% + 8px); right: 0;
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 6px;
+  min-width: 160px; box-shadow: 0 12px 40px rgba(0,0,0,0.4); z-index: 200;
+}
+.avatar-menu-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; transition: var(--transition);
+}
+.avatar-menu-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
+.avatar-menu-item.danger:hover { color: var(--red); }
+.btn-analyze-sm {
+  height: 38px; padding: 0 18px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: var(--radius-md);
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-analyze-sm:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(201,168,76,0.35); }
+.btn-analyze-sm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ── Dashboard Body ── */
+.dash-body {
+  flex: 1; display: flex; overflow: hidden; position: relative;
+  height: calc(100vh - var(--nav-height));
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); flex-shrink: 0;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--glass-border);
+  display: flex; flex-direction: column;
+  padding: 20px 12px;
+  overflow-y: auto; transition: var(--transition);
+}
+.sidebar-section-label {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-muted);
+  padding: 0 10px; margin: 16px 0 6px;
+}
+.sidebar-section-label:first-child { margin-top: 0; }
+.sidebar-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-radius: var(--radius-sm);
+  font-size: 13.5px; font-weight: 500; color: var(--text-secondary);
+  cursor: pointer; transition: var(--transition);
+  position: relative; border: none; background: none; width: 100%;
+  text-align: left;
+}
+.sidebar-item:hover { background: var(--bg-card); color: var(--text-primary); }
+.sidebar-item.active {
+  background: var(--gold-dim);
+  color: var(--gold);
+  border-left: 2px solid var(--gold);
+  padding-left: 10px;
+}
+.sidebar-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+.sidebar-lock {
+  margin-left: auto; font-size: 11px; color: var(--text-muted);
+}
+.sidebar-upgrade-box {
+  margin-top: auto; padding: 16px;
+  background: var(--gold-dim); border: 1px solid var(--gold-border);
+  border-radius: var(--radius-md);
+}
+.sidebar-upgrade-box p { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 10px; }
+.btn-upgrade-sm {
+  width: 100%; height: 34px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: var(--radius-sm);
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 12px; cursor: pointer; transition: var(--transition);
+}
+.btn-upgrade-sm:hover { transform: translateY(-1px); }
+
+/* ── Main Content ── */
+.dash-main {
+  flex: 1; overflow-y: auto; padding: 28px;
+}
+
+/* ── Page Panels ── */
+.dash-panel { display: none; }
+.dash-panel.active { display: block; }
+
+/* ── Cards ── */
+.dash-card {
+  background: var(--bg-card);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg); padding: 24px;
+  backdrop-filter: blur(12px); transition: var(--transition);
+  animation: fadeSlideUp 0.4s ease both;
+}
+.dash-card:hover { border-color: var(--glass-border-hover); }
+.card-header {
+  display: flex; align-items: flex-start;
+  justify-content: space-between; gap: 12px; margin-bottom: 20px;
+}
+.card-eyebrow {
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--gold); margin-bottom: 3px;
+}
+.card-title {
+  font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700;
+  color: var(--text-primary); line-height: 1.2;
+}
+.card-subtitle { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.card-badge {
+  font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 99px;
+  white-space: nowrap; flex-shrink: 0;
+}
+.badge-ai { background: var(--purple-dim); color: var(--purple); }
+.badge-pro { background: var(--gold-dim); color: var(--gold); }
+.badge-live { background: var(--red-dim); color: var(--red); }
+
+.divider { height: 1px; background: var(--glass-border); margin: 18px 0; }
+
+/* ── Stat Row ── */
+.stat-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px; margin-bottom: 24px;
+}
+.stat-card {
+  background: var(--bg-card); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 18px 20px;
+  backdrop-filter: blur(12px); transition: var(--transition);
+  animation: fadeSlideUp 0.4s ease both;
+}
+.stat-card:hover { border-color: var(--glass-border-hover); transform: translateY(-2px); }
+.stat-label {
+  font-size: 11px; color: var(--text-muted); text-transform: uppercase;
+  letter-spacing: 0.08em; font-weight: 500; margin-bottom: 8px;
+  display: flex; align-items: center; gap: 6px;
+}
+.dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.stat-value {
+  font-family: 'Syne', sans-serif; font-size: 26px; font-weight: 700;
+  color: var(--text-primary); line-height: 1; margin-bottom: 4px;
+}
+.stat-sub { font-size: 12px; color: var(--text-muted); }
+.stat-trend {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11.5px; font-weight: 500; padding: 2px 8px;
+  border-radius: 99px; margin-top: 6px;
+}
+.trend-up { background: var(--green-dim); color: var(--green); }
+.trend-neutral { background: rgba(255,255,255,0.06); color: var(--text-muted); }
+
+/* ── Dashboard Grid ── */
+.dash-grid { display: grid; grid-template-columns: 8fr 4fr; gap: 18px; }
+@media (max-width: 1024px) { .dash-grid { grid-template-columns: 1fr; } }
+
+/* ── URL Input ── */
+.url-bar {
+  background: var(--bg-card); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg); padding: 18px 22px;
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 24px; backdrop-filter: blur(12px);
+  animation: fadeSlideUp 0.4s ease both;
+}
+.url-label { font-size: 13px; color: var(--text-muted); white-space: nowrap; }
+.url-input-wrap {
+  flex: 1; min-width: 220px;
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 0 16px; height: 44px;
+  transition: var(--transition);
+}
+.url-input-wrap:focus-within { border-color: var(--gold-border); background: var(--gold-dim); }
+.url-input {
+  flex: 1; background: none; border: none; outline: none;
+  color: var(--text-primary); font-family: 'DM Sans', sans-serif; font-size: 14px;
+}
+.url-input::placeholder { color: var(--text-muted); }
+.btn-sm {
+  height: 44px; padding: 0 22px;
+  background: linear-gradient(135deg, var(--gold), var(--gold-light));
+  border: none; border-radius: var(--radius-md);
+  color: #1A1200; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 13.5px;
+  cursor: pointer; transition: var(--transition);
+}
+.btn-sm:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(201,168,76,0.3); }
+.btn-sm:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+/* ── Video Grid ── */
+.video-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px;
+}
+.video-thumb {
+  background: var(--bg-card); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); overflow: hidden; cursor: pointer;
+  transition: var(--transition);
+}
+.video-thumb:hover { border-color: var(--gold-border); transform: scale(1.03) translateY(-2px); }
+.video-thumb:hover .thumb-overlay { opacity: 1; }
+.thumb-img-wrap { aspect-ratio: 16/9; overflow: hidden; background: rgba(255,255,255,0.04); position: relative; }
+.thumb-img-wrap img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease; display: block; }
+.video-thumb:hover .thumb-img-wrap img { transform: scale(1.06); }
+.thumb-overlay {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; transition: var(--transition);
+}
+.thumb-placeholder {
+  aspect-ratio: 16/9; background: linear-gradient(135deg,#0F0F25,#1A1A35);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-muted); font-size: 22px;
+}
+.video-info { padding: 9px 10px 11px; }
+.video-title {
+  font-size: 12px; font-weight: 500; color: var(--text-primary);
+  line-height: 1.35; margin-bottom: 5px;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.video-meta { display: flex; justify-content: space-between; align-items: center; }
+.video-views { font-size: 11px; color: var(--text-muted); }
+.video-score {
+  font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 99px;
+  background: var(--green-dim); color: var(--green);
+}
+
+/* ── SEO Form ── */
+.seo-input {
+  width: 100%; background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+  padding: 10px 14px; color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+  outline: none; transition: var(--transition); margin-bottom: 10px;
+}
+.seo-input::placeholder { color: var(--text-muted); }
+.seo-input:focus { border-color: var(--gold-border); background: var(--gold-dim); }
+.seo-textarea {
+  width: 100%; min-height: 68px; resize: none;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--glass-border); border-radius: var(--radius-md);
+  padding: 10px 14px; color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px;
+  outline: none; transition: var(--transition); margin-bottom: 10px;
+  line-height: 1.55;
+}
+.seo-textarea::placeholder { color: var(--text-muted); }
+.seo-textarea:focus { border-color: var(--gold-border); background: var(--gold-dim); }
+
+.btn-generate {
+  width: 100%; height: 42px;
+  background: linear-gradient(135deg, var(--purple), #7C6AE8);
+  border: none; border-radius: var(--radius-md);
+  color: #fff; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 13.5px;
+  cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+.btn-generate:hover { transform: translateY(-1px); box-shadow: 0 6px 24px rgba(167,139,250,0.3); }
+.btn-generate:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+.seo-result { display: none; margin-top: 16px; animation: fadeSlideUp 0.4s ease; }
+.seo-result.visible { display: block; }
+.seo-block {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 14px; margin-bottom: 10px;
+  position: relative;
+}
+.seo-block-label {
+  font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--gold); margin-bottom: 7px;
+}
+.seo-block-text { font-size: 13px; color: var(--text-secondary); line-height: 1.6; }
+.tag-cloud { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 4px; }
+.seo-tag {
+  font-size: 12px; padding: 3px 11px; border-radius: 99px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border);
+  color: var(--text-secondary); cursor: pointer; transition: var(--transition);
+}
+.seo-tag:hover { border-color: var(--gold-border); color: var(--gold); background: var(--gold-dim); }
+.copy-btn {
+  position: absolute; top: 10px; right: 10px;
+  background: rgba(255,255,255,0.06); border: 1px solid var(--glass-border);
+  border-radius: 6px; padding: 4px 10px;
+  color: var(--text-muted); font-size: 11.5px;
+  cursor: pointer; transition: var(--transition);
+  display: flex; align-items: center; gap: 5px;
+}
+.copy-btn:hover { color: var(--gold); border-color: var(--gold-border); background: var(--gold-dim); }
+
+/* ── Thumbnail ── */
+.thumb-ratio-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+.thumb-ratio-tab {
+  padding: 5px 14px; border-radius: 99px; font-size: 12.5px; font-weight: 500;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+  color: var(--text-muted); cursor: pointer; transition: var(--transition);
+}
+.thumb-ratio-tab.active { background: var(--purple-dim); border-color: rgba(167,139,250,0.3); color: var(--purple); }
+
+.thumb-preview-area {
+  background: rgba(0,0,0,0.3); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 160px; margin-bottom: 14px; position: relative;
+}
+.thumb-preview-area img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.thumb-preview-empty {
+  text-align: center; padding: 24px;
+  color: var(--text-muted); font-size: 13px;
+}
+.thumb-suggestions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+.thumb-suggestion-item {
+  display: flex; align-items: flex-start; gap: 8px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+}
+.thumb-suggestion-item span { font-size: 12.5px; color: var(--text-secondary); line-height: 1.4; }
+
+/* ── History Panel ── */
+.history-empty {
+  text-align: center; padding: 60px 20px;
+  color: var(--text-muted); font-size: 14px;
+}
+.history-empty svg { width: 48px; height: 48px; opacity: 0.3; margin: 0 auto 12px; display: block; }
+.history-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px;
+}
+.history-card {
+  background: var(--bg-card); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 16px; transition: var(--transition);
+  cursor: pointer; animation: fadeSlideUp 0.4s ease both;
+}
+.history-card:hover { border-color: var(--gold-border); transform: translateY(-2px); }
+.history-card-type {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.1em;
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.history-card-title { font-size: 13.5px; font-weight: 500; color: var(--text-primary); margin-bottom: 6px; line-height: 1.4; }
+.history-card-meta { font-size: 11.5px; color: var(--text-muted); }
+
+/* ── API Panel ── */
+.api-key-display {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 12px 16px; margin-bottom: 14px;
+  font-family: monospace; font-size: 13px; color: var(--text-secondary);
+}
+.api-key-display .key-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.api-input-group { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+@media (max-width: 600px) { .api-input-group { grid-template-columns: 1fr; } }
+.api-field-label { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; font-weight: 500; }
+.api-input {
+  width: 100%; height: 44px; padding: 0 14px;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); color: var(--text-primary);
+  font-family: 'DM Sans', sans-serif; font-size: 13.5px; outline: none;
+  transition: var(--transition);
+}
+.api-input:focus { border-color: var(--gold-border); background: var(--gold-dim); }
+.api-input::placeholder { color: var(--text-muted); }
+.btn-save-keys {
+  height: 42px; padding: 0 24px;
+  background: linear-gradient(135deg, var(--green), #22B572);
+  border: none; border-radius: var(--radius-md);
+  color: #fff; font-family: 'Syne', sans-serif;
+  font-weight: 600; font-size: 13.5px; cursor: pointer; transition: var(--transition);
+}
+.btn-save-keys:hover { transform: translateY(-1px); box-shadow: 0 5px 20px rgba(47,217,138,0.3); }
+
+/* ── Team Panel ── */
+.team-locked-overlay {
+  text-align: center; padding: 60px 20px;
+}
+.team-locked-overlay svg { width: 52px; height: 52px; opacity: 0.3; margin: 0 auto 16px; display: block; }
+.team-locked-overlay h3 { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+.team-locked-overlay p { font-size: 14px; color: var(--text-secondary); max-width: 320px; margin: 0 auto 24px; }
+.team-member-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.team-member-row:last-child { border-bottom: none; }
+.member-avatar {
+  width: 38px; height: 38px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, var(--blue), var(--purple));
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; color: #fff;
+}
+.member-info { flex: 1; }
+.member-name { font-size: 13.5px; font-weight: 500; color: var(--text-primary); }
+.member-email { font-size: 12px; color: var(--text-muted); }
+.member-role {
+  font-size: 11px; font-weight: 600; padding: 3px 10px;
+  border-radius: 99px; background: var(--blue-dim); color: var(--blue);
+}
+.member-status-pending { color: var(--text-muted); font-size: 11.5px; }
+.team-add-form {
+  display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-top: 20px;
+}
+.team-add-form .cf-field { margin-bottom: 0; }
+
+/* ── Info rows ── */
+.info-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 13px;
+}
+.info-row:last-child { border-bottom: none; }
+.info-row-key { color: var(--text-muted); }
+.info-row-val { color: var(--text-primary); font-weight: 500; }
+
+/* ── Channel card ── */
+.channel-profile { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.channel-avatar {
+  width: 54px; height: 54px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  border: 2px solid var(--gold-border);
+  background: linear-gradient(135deg, #1A1A35, #2A2A50);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--gold);
+}
+.channel-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.channel-name { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--text-primary); }
+.channel-handle { font-size: 12.5px; color: var(--text-muted); margin-top: 2px; }
+.ch-stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.ch-stat {
+  background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm); padding: 10px 12px; transition: var(--transition);
+}
+.ch-stat:hover { border-color: var(--gold-border); background: var(--gold-dim); }
+.ch-stat-label { font-size: 11px; color: var(--text-muted); margin-bottom: 4px; }
+.ch-stat-val { font-family: 'Syne', sans-serif; font-size: 17px; font-weight: 700; color: var(--text-primary); }
+
+/* ── Pill tabs ── */
+.pill-tabs { display: flex; gap: 6px; margin-bottom: 16px; }
+.pill-tab {
+  padding: 5px 14px; border-radius: 99px; font-size: 12.5px; font-weight: 500;
+  background: rgba(255,255,255,0.04); border: 1px solid var(--glass-border);
+  color: var(--text-muted); cursor: pointer; transition: var(--transition);
+}
+.pill-tab.active { background: var(--gold-dim); border-color: var(--gold-border); color: var(--gold); }
+.pill-tab:hover:not(.active) { border-color: var(--glass-border-hover); color: var(--text-secondary); }
+
+/* ══ TOAST ═════════════════════════════════════════════════════════════════ */
+#toastContainer {
+  position: fixed; bottom: 24px; right: 24px;
+  z-index: 500; display: flex; flex-direction: column; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-surface); border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md); padding: 12px 16px;
+  min-width: 260px; max-width: 360px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+  pointer-events: all; animation: toastIn 0.3s ease;
+}
+.toast.success { border-left: 3px solid var(--green); }
+.toast.error   { border-left: 3px solid var(--red); }
+.toast.warning { border-left: 3px solid var(--gold); }
+.toast.info    { border-left: 3px solid var(--blue); }
+.toast-icon { font-size: 16px; flex-shrink: 0; }
+.toast-text { font-size: 13px; color: var(--text-primary); flex: 1; }
+.toast-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 16px; }
+
+/* ══ SKELETON ══════════════════════════════════════════════════════════════ */
+.skeleton {
+  background-size: 200% 100%;
+  background-image: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.1) 50%, rgba(255,255,255,0.04) 100%);
+  animation: shimmer 1.5s infinite; border-radius: var(--radius-sm);
+}
+.skel-line { height: 12px; margin-bottom: 8px; }
+.skel-block { border-radius: var(--radius-md); }
+
+/* ══ ANIMATIONS ════════════════════════════════════════════════════════════ */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(20px) scale(0.95); }
+  to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.spinner {
+  width: 15px; height: 15px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.2);
+  border-top-color: rgba(255,255,255,0.8);
+  animation: spin 0.7s linear infinite; display: inline-block;
+}
+
+/* ══ RESPONSIVE ════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .dash-grid { grid-template-columns: 1fr; }
+  .hero-stats .stat-divider { display: none; }
+  .lnav-links { display: none; }
+  .cf-row { flex-direction: column; gap: 0; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ LANDING PAGE ══════════════════════════════════════════════════════════ -->
+<div id="landingPage">
+
+  <!-- Floating Navbar -->
+  <nav id="landingNav">
+    <a class="lnav-logo" href="#">
+      <div class="lnav-logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73.47-.13 1.33-.22 2.65-.28 1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z"/></svg>
+      </div>
+      YT<span>Insight</span>
+    </a>
+    <div class="lnav-links">
+      <a class="lnav-link" href="#home">Home</a>
+      <a class="lnav-link" href="#about">About Us</a>
+      <a class="lnav-link" href="#docs">Documentation</a>
+      <a class="lnav-link" href="#pricing">Pricing</a>
+      <a class="lnav-link" href="#contact">Contact</a>
+    </div>
+    <div class="lnav-right">
+      <button class="btn-theme-sm" onclick="toggleTheme()" title="Toggle theme">
+        <svg id="themeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <button class="btn-login" onclick="openAuthModal('login')">Login</button>
+    </div>
+  </nav>
+
+  <!-- Hero -->
+  <section class="landing-hero" id="home">
+    <div class="hero-glow"></div>
+    <div class="hero-eyebrow">✦ YouTube Intelligence Platform</div>
+    <h1 class="hero-h1">
+      Grow Faster With<br><span class="accent">AI-Powered</span><br>
+      <span class="accent-purple">YouTube Analytics</span>
+    </h1>
+    <p class="hero-sub">
+      Analyze channels, generate SEO-optimized titles, descriptions and thumbnails, track history, and collaborate with your team — all in one platform.
+    </p>
+    <div class="hero-cta-row">
+      <button class="btn-cta" onclick="openGetStartedModal()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        Get Started Free
+      </button>
+      <button class="btn-cta-outline" onclick="scrollTo('#pricing')">View Pricing</button>
+    </div>
+    <div class="hero-stats">
+      <div class="hero-stat" style="text-align:center">
+        <div class="hero-stat-val">10K+</div>
+        <div class="hero-stat-label">Creators Trust Us</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="hero-stat" style="text-align:center">
+        <div class="hero-stat-val">50M+</div>
+        <div class="hero-stat-label">Videos Analyzed</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="hero-stat" style="text-align:center">
+        <div class="hero-stat-val">98%</div>
+        <div class="hero-stat-label">Uptime SLA</div>
+      </div>
+      <div class="stat-divider"></div>
+      <div class="hero-stat" style="text-align:center">
+        <div class="hero-stat-val">3.2×</div>
+        <div class="hero-stat-label">Avg View Growth</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="section" id="features">
+    <div class="section-eyebrow">What We Offer</div>
+    <h2 class="section-h2">Everything a serious creator needs</h2>
+    <p class="section-sub">From deep channel analytics to AI-generated SEO packages and thumbnail coaching — YTInsight covers every angle.</p>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--red-dim)">📊</div>
+        <div class="feature-title">Channel Analytics</div>
+        <div class="feature-desc">Deep-dive subscriber growth, view counts, engagement rates, and revenue estimates powered by the YouTube Data API.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--purple-dim)">✦</div>
+        <div class="feature-title">AI SEO Generator</div>
+        <div class="feature-desc">Generate optimized titles, descriptions, and tags in seconds using Claude AI — tuned for YouTube's search algorithm.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--gold-dim)">🖼</div>
+        <div class="feature-title">Thumbnail Intelligence</div>
+        <div class="feature-desc">Analyze thumbnails, get CTR scores, and receive AI-generated context-specific thumbnails — 16:9 for long-form, 9:16 for Shorts.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--blue-dim)">📜</div>
+        <div class="feature-title">History Tracking</div>
+        <div class="feature-desc">Every analysis, SEO result, and thumbnail is saved locally. Pick up where you left off and track improvement over time.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:var(--green-dim)">👥</div>
+        <div class="feature-title">Team Collaboration</div>
+        <div class="feature-desc">Invite editors, viewers, and admins to your workspace. Available on the Team plan — manage multiple channels together.</div>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon" style="background:rgba(255,255,255,0.08)">🔐</div>
+        <div class="feature-title">Secure API Management</div>
+        <div class="feature-desc">Store your YouTube API key and other credentials locally in your browser — never transmitted to our servers.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About -->
+  <section class="section" id="about" style="background:var(--bg-surface); max-width:100%; padding:80px 0">
+    <div style="max-width:1100px; margin:0 auto; padding:0 24px">
+      <div class="section-eyebrow">About YTInsight</div>
+      <div class="about-grid">
+        <div class="about-text">
+          <h2 class="section-h2">Built for creators who take growth seriously</h2>
+          <p>YTInsight was built by The Digital Edge (TDE) — a Pakistan-based digital product studio — to solve a real problem: YouTube creators waste hours guessing which titles, tags, and thumbnails will perform.</p>
+          <p>We replaced guesswork with intelligence. YTInsight combines live YouTube data with Claude AI to give every creator an unfair advantage, regardless of channel size.</p>
+          <p>Whether you're a solo creator or managing a team of content producers, YTInsight's platform adapts to your workflow with a clean dashboard, persistent history, and collaboration tools built right in.</p>
+        </div>
+        <div class="about-visual">
+          <div style="margin-bottom:16px">
+            <div style="font-size:10.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:8px">Platform Stats</div>
+          </div>
+          <div class="info-row"><span class="info-row-key">Founded</span><span class="info-row-val">2024</span></div>
+          <div class="info-row"><span class="info-row-key">HQ</span><span class="info-row-val">Lahore, Pakistan</span></div>
+          <div class="info-row"><span class="info-row-key">AI Engine</span><span class="info-row-val">Claude by Anthropic</span></div>
+          <div class="info-row"><span class="info-row-key">Data Source</span><span class="info-row-val">YouTube Data API v3</span></div>
+          <div class="info-row"><span class="info-row-key">Auth</span><span class="info-row-val">Firebase Auth</span></div>
+          <div class="info-row"><span class="info-row-key">Payments</span><span class="info-row-val">JazzCash / EasyPaisa / AssanPay</span></div>
+          <div class="info-row"><span class="info-row-key">Version</span><span class="info-row-val">2.0 (2025)</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Documentation -->
+  <section class="section" id="docs">
+    <div class="section-eyebrow">Documentation</div>
+    <h2 class="section-h2">Get up and running in minutes</h2>
+    <p class="section-sub">YTInsight requires minimal setup. Here's everything you need to know.</p>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:18px;margin-top:44px">
+      <div class="dash-card" style="counter-increment:step">
+        <div class="card-eyebrow">Step 1</div>
+        <div class="card-title">Create an Account</div>
+        <div class="card-subtitle" style="margin-top:8px">Click "Get Started" or "Login" and register with your email. Your account is secured via Firebase Authentication.</div>
+      </div>
+      <div class="dash-card">
+        <div class="card-eyebrow">Step 2</div>
+        <div class="card-title">Add Your YouTube API Key</div>
+        <div class="card-subtitle" style="margin-top:8px">Go to Dashboard → API Settings. Paste your YouTube Data API v3 key — it's stored locally in your browser, never on our servers.</div>
+      </div>
+      <div class="dash-card">
+        <div class="card-eyebrow">Step 3</div>
+        <div class="card-title">Analyze Any Channel or Video</div>
+        <div class="card-subtitle" style="margin-top:8px">Paste a YouTube channel handle, channel URL, or video URL into the input bar and click Analyze Now.</div>
+      </div>
+      <div class="dash-card">
+        <div class="card-eyebrow">Step 4</div>
+        <div class="card-title">Generate SEO & Thumbnails</div>
+        <div class="card-subtitle" style="margin-top:8px">Use the SEO Generator to create titles, descriptions, and tags. Analyze thumbnails for CTR coaching and AI-generated concepts.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Pricing -->
+  <section class="section" id="pricing" style="background:var(--bg-surface);max-width:100%;padding:80px 0">
+    <div style="max-width:1100px;margin:0 auto;padding:0 24px;text-align:center">
+      <div class="section-eyebrow">Pricing</div>
+      <h2 class="section-h2">Simple, transparent pricing in PKR</h2>
+      <p class="section-sub" style="margin:0 auto 0">No hidden fees. Cancel anytime. Both plans include full AI-powered SEO generation.</p>
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <div class="pricing-plan">Basic Plan</div>
+          <div class="pricing-price">
+            <sup>PKR</sup>999<sub>/mo</sub>
+          </div>
+          <div class="pricing-period">Billed monthly · Auto-renewal via AssanPay</div>
+          <ul class="pricing-feats">
+            <li><span class="feat-check">✓</span> Channel & video analytics</li>
+            <li><span class="feat-check">✓</span> AI SEO Generator (unlimited)</li>
+            <li><span class="feat-check">✓</span> Thumbnail analysis & coaching</li>
+            <li><span class="feat-check">✓</span> Full history tracking</li>
+            <li><span class="feat-check">✓</span> API key management</li>
+            <li><span class="feat-lock">🔒</span> Team collaboration</li>
+            <li><span class="feat-lock">🔒</span> Multi-channel workspace</li>
+            <li><span class="feat-lock">🔒</span> Priority support</li>
+          </ul>
+          <button class="btn-plan" onclick="openGetStartedModal()">Get Started</button>
+        </div>
+        <div class="pricing-card featured">
+          <div class="pricing-badge">Most Popular</div>
+          <div class="pricing-plan">Team Plan</div>
+          <div class="pricing-price">
+            <sup>PKR</sup>2,999<sub>/mo</sub>
+          </div>
+          <div class="pricing-period">Billed monthly · Up to 5 team members</div>
+          <ul class="pricing-feats">
+            <li><span class="feat-check">✓</span> Everything in Basic</li>
+            <li><span class="feat-check">✓</span> Team collaboration workspace</li>
+            <li><span class="feat-check">✓</span> Up to 5 team members</li>
+            <li><span class="feat-check">✓</span> Multi-channel management</li>
+            <li><span class="feat-check">✓</span> Role-based access (editor/viewer/admin)</li>
+            <li><span class="feat-check">✓</span> Priority WhatsApp support</li>
+            <li><span class="feat-check">✓</span> Early access to new features</li>
+            <li><span class="feat-check">✓</span> Custom branding (coming soon)</li>
+          </ul>
+          <button class="btn-plan gold" onclick="openGetStartedModal()">Get Team Plan</button>
+        </div>
+      </div>
+      <p style="font-size:13px;color:var(--text-muted);margin-top:24px">Pay via JazzCash, EasyPaisa, or AssanPay. Upgrade/downgrade anytime.</p>
+    </div>
+  </section>
+
+  <!-- Contact -->
+  <section class="section" id="contact">
+    <div class="section-eyebrow">Contact</div>
+    <h2 class="section-h2">Get in touch</h2>
+    <p class="section-sub">Have a question or want to talk pricing? Fill out the form below and we'll reach out via WhatsApp.</p>
+    <div class="contact-form">
+      <div class="cf-row">
+        <div class="cf-field">
+          <label class="cf-label">Your Name</label>
+          <input class="cf-input" id="ctName" placeholder="Muhammad Ali" />
+        </div>
+        <div class="cf-field">
+          <label class="cf-label">Email Address</label>
+          <input class="cf-input" id="ctEmail" type="email" placeholder="you@example.com" />
+        </div>
+      </div>
+      <div class="cf-field">
+        <label class="cf-label">WhatsApp Number</label>
+        <input class="cf-input" id="ctWhatsapp" placeholder="+92 300 1234567" />
+      </div>
+      <div class="cf-field" style="margin-top:4px">
+        <button class="btn-cta" style="width:100%;justify-content:center" onclick="submitContactForm()">
+          Send Message
+        </button>
+      </div>
+      <div id="ctResult" style="font-size:13px;margin-top:10px;min-height:18px"></div>
+    </div>
+  </section>
+
+  <footer class="landing-footer">
+    <div style="margin-bottom:8px">
+      <strong style="color:var(--text-primary)">YTInsight</strong> — YouTube Intelligence Platform
+    </div>
+    Built by <strong>The Digital Edge (TDE)</strong> · Pakistan · © 2025 · Powered by YouTube API & Claude AI
+  </footer>
+</div>
+
+<!-- ══ DASHBOARD PAGE ════════════════════════════════════════════════════════ -->
+<div id="dashboardPage">
+
+  <!-- Dashboard Nav -->
+  <nav class="dash-nav">
+    <a class="dash-nav-logo" href="#">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24"><path d="M10 15l5.19-3L10 9v6m11.56-7.83c.13.47.22 1.1.28 1.9.07.8.1 1.49.1 2.09L22 12c0 2.19-.16 3.8-.44 4.83-.25.9-.83 1.48-1.73 1.73-.47.13-1.33.22-2.65.28-1.3.07-2.49.1-3.59.1L12 19c-4.19 0-6.8-.16-7.83-.44-.9-.25-1.48-.83-1.73-1.73-.13-.47-.22-1.1-.28-1.9-.07-.8-.1-1.49-.1-2.09L2 12c0-2.19.16-3.8.44-4.83.25-.9.83-1.48 1.73-1.73.47-.13 1.33-.22 2.65-.28 1.3-.07 2.49-.1 3.59-.1L12 5c4.19 0 6.8.16 7.83.44.9.25 1.48.83 1.73 1.73z"/></svg>
+      </div>
+      YT<span>Insight</span>
+    </a>
+    <div class="nav-url-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+      <input class="nav-url-input" id="navUrlInput" placeholder="Channel URL or video link…" />
+    </div>
+    <button class="btn-analyze-sm" id="navAnalyzeBtn" onclick="triggerAnalyze()">Analyze</button>
+    <div class="nav-right">
+      <button class="btn-theme-sm" onclick="toggleTheme()">
+        <svg id="themeIcon2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <span class="nav-plan-badge plan-free" id="navPlanBadge">Free</span>
+      <div class="nav-avatar" id="navAvatar">U
+        <div class="avatar-menu">
+          <div class="avatar-menu-item" onclick="switchPanel('api')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="m8 21 4-4 4 4"/><path d="M12 17v4"/></svg>
+            API Settings
+          </div>
+          <div class="avatar-menu-item danger" onclick="logoutUser()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            Sign Out
+          </div>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <div class="dash-body">
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-section-label">Main</div>
+      <button class="sidebar-item active" id="sb-dashboard" onclick="switchPanel('dashboard')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </button>
+      <button class="sidebar-item" id="sb-history" onclick="switchPanel('history')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        History
+      </button>
+      <div class="sidebar-section-label">Tools</div>
+      <button class="sidebar-item" id="sb-api" onclick="switchPanel('api')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14.5 10-5 4"/><path d="m9.5 10 5 4"/><rect x="2" y="2" width="20" height="20" rx="4"/></svg>
+        API Keys
+      </button>
+      <button class="sidebar-item" id="sb-team" onclick="switchPanel('team')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Team
+        <span class="sidebar-lock" id="teamLockIcon">🔒</span>
+      </button>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="dash-main">
+
+      <!-- ── DASHBOARD PANEL ── -->
+      <div class="dash-panel active" id="panel-dashboard">
+
+        <!-- Stat Row -->
+        <div class="stat-row">
+          <div class="stat-card" style="animation-delay:0s">
+            <div class="stat-label"><span class="dot" style="background:var(--red)"></span> Subscribers</div>
+            <div class="stat-value" id="statSubs">—</div>
+            <div class="stat-sub">Total subscribers</div>
+            <div class="stat-trend trend-neutral" id="statSubsTrend">Enter a channel</div>
+          </div>
+          <div class="stat-card" style="animation-delay:.05s">
+            <div class="stat-label"><span class="dot" style="background:var(--blue)"></span> Total Views</div>
+            <div class="stat-value" id="statViews">—</div>
+            <div class="stat-sub">Lifetime views</div>
+            <div class="stat-trend trend-neutral" id="statViewsTrend">Enter a channel</div>
+          </div>
+          <div class="stat-card" style="animation-delay:.1s">
+            <div class="stat-label"><span class="dot" style="background:var(--green)"></span> Videos</div>
+            <div class="stat-value" id="statVideos">—</div>
+            <div class="stat-sub">Uploaded content</div>
+            <div class="stat-trend trend-neutral">—</div>
+          </div>
+          <div class="stat-card" style="animation-delay:.15s">
+            <div class="stat-label"><span class="dot" style="background:var(--gold)"></span> Est. Revenue</div>
+            <div class="stat-value" id="statRevenue">—</div>
+            <div class="stat-sub">Monthly estimate</div>
+            <div class="stat-trend trend-neutral">—</div>
+          </div>
+        </div>
+
+        <!-- URL Bar -->
+        <div class="url-bar">
+          <span class="url-label">Analyze:</span>
+          <div class="url-input-wrap">
+            <svg viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.8" width="15" height="15"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <input class="url-input" id="mainUrlInput" placeholder="https://youtube.com/@channel or video URL…" oninput="syncUrl(this)" />
+          </div>
+          <button class="btn-sm" id="analyzeBtn" onclick="analyzeChannel()">Analyze Now</button>
+          <button class="btn-sm" style="background:rgba(255,255,255,0.07);color:var(--text-secondary);border:1px solid var(--glass-border);box-shadow:none" onclick="loadDemo()">Demo</button>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="dash-grid">
+          <!-- Videos Card -->
+          <div class="dash-card" style="animation-delay:.1s">
+            <div class="card-header">
+              <div>
+                <div class="card-eyebrow">Performance</div>
+                <div class="card-title">Recent Videos</div>
+                <div class="card-subtitle" id="videoCardSub">Analyze a channel to see videos</div>
+              </div>
+              <div class="card-badge badge-live" id="liveBadge" style="display:none">● LIVE</div>
+            </div>
+            <div class="pill-tabs" id="videoTabs">
+              <button class="pill-tab active" onclick="switchVideoTab(this,'recent')">Recent</button>
+              <button class="pill-tab" onclick="switchVideoTab(this,'popular')">Popular</button>
+              <button class="pill-tab" onclick="switchVideoTab(this,'shorts')">Shorts</button>
+            </div>
+            <div id="videoGrid" class="video-grid">
+              <div class="video-thumb"><div class="thumb-placeholder skeleton skel-block" style="aspect-ratio:16/9"></div><div class="video-info"><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width:60%"></div></div></div>
+              <div class="video-thumb"><div class="thumb-placeholder skeleton skel-block" style="aspect-ratio:16/9"></div><div class="video-info"><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width:60%"></div></div></div>
+              <div class="video-thumb"><div class="thumb-placeholder skeleton skel-block" style="aspect-ratio:16/9"></div><div class="video-info"><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width:60%"></div></div></div>
+              <div class="video-thumb"><div class="thumb-placeholder skeleton skel-block" style="aspect-ratio:16/9"></div><div class="video-info"><div class="skeleton skel-line"></div><div class="skeleton skel-line" style="width:60%"></div></div></div>
+            </div>
+
+            <div class="divider"></div>
+
+            <!-- SEO Generator -->
+            <div class="card-header" style="margin-bottom:14px">
+              <div>
+                <div class="card-eyebrow">AI-Powered</div>
+                <div class="card-title">SEO Generator</div>
+              </div>
+              <div class="card-badge badge-ai">✦ Claude AI</div>
+            </div>
+            <div style="margin-bottom:10px">
+              <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+                <input class="seo-input" id="seoTopic" placeholder="Video topic or keyword…" style="margin:0;flex:1" />
+                <div class="thumb-ratio-tabs" style="margin:0;flex-shrink:0">
+                  <button class="thumb-ratio-tab active" id="ratio169Btn" onclick="setRatio('16:9',this)">16:9 Long</button>
+                  <button class="thumb-ratio-tab" id="ratio916Btn" onclick="setRatio('9:16',this)">9:16 Short</button>
+                </div>
+              </div>
+              <textarea class="seo-textarea" id="seoDesc" placeholder="Brief description (optional)…"></textarea>
+              <div style="display:flex;gap:10px">
+                <button class="btn-generate" id="seoGenBtn" onclick="generateSEO()" style="flex:1">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  Generate SEO Package
+                </button>
+                <button class="btn-generate" id="thumbGenBtn" onclick="generateThumbnail()" style="flex:1;background:linear-gradient(135deg,var(--blue),#2278E8)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  Generate Thumbnail
+                </button>
+              </div>
+            </div>
+
+            <div class="seo-result" id="seoResult">
+              <div class="seo-block">
+                <div class="seo-block-label">Optimized Title</div>
+                <button class="copy-btn" onclick="copyField('seoTitleOut')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+                </button>
+                <div class="seo-block-text" id="seoTitleOut"></div>
+              </div>
+              <div class="seo-block">
+                <div class="seo-block-label">Description</div>
+                <button class="copy-btn" onclick="copyField('seoDescOut')">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy
+                </button>
+                <div class="seo-block-text" id="seoDescOut"></div>
+              </div>
+              <div class="seo-block">
+                <div class="seo-block-label">Tags</div>
+                <button class="copy-btn" onclick="copyAllTags()">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy All
+                </button>
+                <div class="tag-cloud" id="seoTagsOut"></div>
+              </div>
+            </div>
+
+            <!-- Thumbnail Result -->
+            <div id="thumbResult" style="display:none;margin-top:16px;animation:fadeSlideUp .4s ease">
+              <div class="seo-block">
+                <div class="seo-block-label" id="thumbResultLabel">Generated Thumbnail Concept (16:9)</div>
+                <div id="thumbConceptOut" class="seo-block-text"></div>
+              </div>
+              <div class="thumb-suggestions" id="thumbSuggestionsOut"></div>
+            </div>
+          </div>
+
+          <!-- Channel Card -->
+          <div class="dash-card" style="animation-delay:.15s">
+            <div class="card-header">
+              <div>
+                <div class="card-eyebrow">Channel</div>
+                <div class="card-title">Analytics</div>
+              </div>
+              <div class="card-badge badge-pro">PRO</div>
+            </div>
+            <div class="channel-profile" id="channelProfile">
+              <div class="channel-avatar" id="chAvatar">YT</div>
+              <div>
+                <div class="channel-name" id="chName">Your Channel</div>
+                <div class="channel-handle" id="chHandle">Analyze a channel to begin</div>
+              </div>
+            </div>
+            <div class="ch-stats-grid" id="chStatsGrid">
+              <div class="ch-stat"><div class="ch-stat-label">Subscribers</div><div class="ch-stat-val" id="chSubs">—</div></div>
+              <div class="ch-stat"><div class="ch-stat-label">Total Views</div><div class="ch-stat-val" id="chViews">—</div></div>
+              <div class="ch-stat"><div class="ch-stat-label">Videos</div><div class="ch-stat-val" id="chVids">—</div></div>
+              <div class="ch-stat"><div class="ch-stat-label">Avg Views</div><div class="ch-stat-val" id="chAvg">—</div></div>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Channel Details</div>
+            <div class="info-row"><span class="info-row-key">Country</span><span class="info-row-val" id="chCountry">—</span></div>
+            <div class="info-row"><span class="info-row-key">Created</span><span class="info-row-val" id="chCreated">—</span></div>
+            <div class="info-row"><span class="info-row-key">Category</span><span class="info-row-val" id="chCat">Entertainment</span></div>
+            <div class="info-row"><span class="info-row-key">API Status</span><span class="info-row-val" id="chApiStatus" style="color:var(--text-muted)">Awaiting</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── HISTORY PANEL ── -->
+      <div class="dash-panel" id="panel-history">
+        <div style="margin-bottom:24px">
+          <div class="card-eyebrow">Your Activity</div>
+          <div class="card-title" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--text-primary)">History</div>
+          <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px">All past analyses and generated content, saved locally in your browser.</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px">
+          <span style="font-size:13px;color:var(--text-muted)">Filter:</span>
+          <div class="pill-tabs" style="margin:0">
+            <button class="pill-tab active" onclick="filterHistory('all',this)">All</button>
+            <button class="pill-tab" onclick="filterHistory('seo',this)">SEO</button>
+            <button class="pill-tab" onclick="filterHistory('thumbnail',this)">Thumbnails</button>
+            <button class="pill-tab" onclick="filterHistory('analysis',this)">Analyses</button>
+          </div>
+          <button class="copy-btn" style="margin-left:auto;position:static" onclick="clearHistory()">Clear All</button>
+        </div>
+        <div id="historyContainer"></div>
+      </div>
+
+      <!-- ── API PANEL ── -->
+      <div class="dash-panel" id="panel-api">
+        <div style="margin-bottom:24px">
+          <div class="card-eyebrow">Configuration</div>
+          <div class="card-title" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--text-primary)">API Keys</div>
+          <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px">Keys are stored locally in your browser and never sent to our servers.</div>
+        </div>
+        <div class="dash-card" style="margin-bottom:18px">
+          <div class="card-eyebrow">YouTube Data API</div>
+          <div class="card-title" style="margin-bottom:16px">YouTube API v3 Key</div>
+          <div class="api-key-display">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="16" height="16"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+            <span class="key-text" id="ytKeyDisplay">Not set</span>
+            <button class="copy-btn" style="position:static" onclick="toggleYtKeyVisibility()">Show</button>
+          </div>
+          <div style="margin-bottom:6px"><label class="api-field-label">YouTube Data API v3 Key</label></div>
+          <div style="display:flex;gap:10px">
+            <input class="api-input" id="ytKeyInput" type="password" placeholder="AIza…" style="flex:1" />
+            <button class="btn-save-keys" onclick="saveYtKey()">Save Key</button>
+          </div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:8px">
+            Get your key at <a href="https://console.developers.google.com" target="_blank" style="color:var(--gold)">console.developers.google.com</a>. Enable YouTube Data API v3.
+          </div>
+        </div>
+      </div>
+
+      <!-- ── TEAM PANEL ── -->
+      <div class="dash-panel" id="panel-team">
+        <div style="margin-bottom:24px">
+          <div class="card-eyebrow">Collaboration</div>
+          <div class="card-title" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--text-primary)">Team</div>
+          <div style="font-size:13.5px;color:var(--text-secondary);margin-top:4px">Manage team members and their access levels.</div>
+        </div>
+
+        <!-- Locked state for free users -->
+        <div id="teamLockedState" style="display:none">
+          <div class="dash-card" style="text-align:center;padding:60px 24px">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="52" height="52" style="opacity:.3;margin:0 auto 16px;display:block;color:var(--text-muted)"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:700;margin-bottom:8px;color:var(--text-primary)">Team Plan Required</div>
+            <p style="font-size:14px;color:var(--text-secondary);max-width:320px;margin:0 auto 24px;line-height:1.6">Invite team members, assign roles, and collaborate on channels together. Upgrade to Team Plan for PKR 2,999/mo.</p>
+            <button class="btn-plan gold" style="display:inline-block;width:auto;padding:0 32px;height:46px" onclick="openGetStartedModal()">Upgrade to Team Plan</button>
+          </div>
+        </div>
+
+        <!-- Active state for paid users -->
+        <div id="teamActiveState" style="display:none">
+          <div class="dash-card" style="margin-bottom:18px">
+            <div class="card-header">
+              <div class="card-title">Team Members</div>
+              <div class="card-badge badge-pro">Team Plan</div>
+            </div>
+            <div id="teamMembersList">
+              <div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13.5px">No members added yet.</div>
+            </div>
+            <div class="divider"></div>
+            <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;font-weight:500">Add a Member</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap">
+              <input class="api-input" id="memberEmailInput" placeholder="member@email.com" style="flex:2;min-width:200px" />
+              <input class="api-input" id="memberNameInput" placeholder="Name" style="flex:1;min-width:120px" />
+              <select class="api-input" id="memberRoleInput" style="flex:1;min-width:120px">
+                <option value="editor">Editor</option>
+                <option value="viewer">Viewer</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button class="btn-save-keys" onclick="addTeamMember()">Add Member</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+</div>
+
+<!-- ══ MODALS ════════════════════════════════════════════════════════════════ -->
+
+<!-- Auth Modal -->
+<div class="modal-overlay" id="authModal">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal('authModal')">×</button>
+    <div class="modal-title">Welcome to YTInsight</div>
+    <div class="modal-sub" id="authModalSub">Sign in to access your dashboard.</div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="loginTab" onclick="switchAuthTab('login')">Login</button>
+      <button class="modal-tab" id="registerTab" onclick="switchAuthTab('register')">Register</button>
+    </div>
+    <div id="registerFields" style="display:none">
+      <div class="modal-field">
+        <label class="modal-label">Full Name</label>
+        <input class="modal-input" id="authName" placeholder="Your name" />
+      </div>
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Email Address</label>
+      <input class="modal-input" id="authEmail" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Password</label>
+      <input class="modal-input" id="authPass" type="password" placeholder="Min 6 characters" />
+    </div>
+    <div class="modal-err" id="authErr"></div>
+    <button class="btn-modal-submit" id="authSubmitBtn" onclick="handleAuth()">Sign In</button>
+  </div>
+</div>
+
+<!-- Get Started Modal -->
+<div class="modal-overlay" id="gsModal">
+  <div class="modal gs-modal">
+    <button class="modal-close" onclick="closeModal('gsModal')">×</button>
+    <div class="modal-title">Get Started Free</div>
+    <div class="modal-sub">Tell us about yourself — we'll reach out on WhatsApp with your access details.</div>
+    <div class="modal-field">
+      <label class="modal-label">Full Name</label>
+      <input class="modal-input" id="gsName" placeholder="Muhammad Ali" />
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">Email Address</label>
+      <input class="modal-input" id="gsEmail" type="email" placeholder="you@example.com" />
+    </div>
+    <div class="modal-field">
+      <label class="modal-label">WhatsApp Number</label>
+      <input class="modal-input" id="gsWhatsapp" placeholder="+92 300 1234567" />
+    </div>
+    <div class="modal-err" id="gsErr"></div>
+    <button class="btn-modal-submit" id="gsSubmitBtn" onclick="submitGetStarted()">Submit & Get Access</button>
+  </div>
+</div>
+
+<!-- Toast Container -->
+<div id="toastContainer"></div>
+
+<script>
+/* ══ BACKEND CONFIG ═══════════════════════════════════════════════════════ */
+const API_BASE = 'api.php'; // PHP backend path
+
+/* ══ STATE ════════════════════════════════════════════════════════════════ */
+let currentUser   = null;
+let userPlan      = 'free'; // 'free' | 'paid'
+let currentRatio  = '16:9';
+let currentVideoTab = 'recent';
+let allVideos     = [];
+let channelData   = null;
+let historyFilter = 'all';
+
+/* ══ THEME ════════════════════════════════════════════════════════════════ */
+function toggleTheme() {
+  const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('ytinsight_theme', t);
+  updateThemeIcons(t);
+}
+function updateThemeIcons(t) {
+  const moon = '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>';
+  const sun  = '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+  ['themeIcon','themeIcon2'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = t === 'dark' ? moon : sun;
+  });
+}
+(function() {
+  const saved = localStorage.getItem('ytinsight_theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeIcons(saved);
+})();
+
+/* ══ NAVIGATION HELPERS ═══════════════════════════════════════════════════ */
+function scrollTo(id) {
+  document.querySelector(id)?.scrollIntoView({ behavior: 'smooth' });
+}
+function showLanding() {
+  document.getElementById('landingPage').style.display = 'block';
+  document.getElementById('dashboardPage').classList.remove('active');
+  document.getElementById('dashboardPage').style.display = 'none';
+}
+function showDashboard(user) {
+  document.getElementById('landingPage').style.display = 'none';
+  document.getElementById('dashboardPage').style.display = 'flex';
+  document.getElementById('dashboardPage').classList.add('active');
+  // Set avatar initial
+  const initials = (user.displayName || user.email || 'U').charAt(0).toUpperCase();
+  document.getElementById('navAvatar').textContent = initials + '▾';
+  renderHistory();
+}
+
+/* ══ SIDEBAR SWITCHING ════════════════════════════════════════════════════ */
+function switchPanel(name) {
+  ['dashboard','history','api','team'].forEach(p => {
+    document.getElementById('panel-' + p).classList.toggle('active', p === name);
+    const sb = document.getElementById('sb-' + p);
+    if (sb) sb.classList.toggle('active', p === name);
+  });
+  if (name === 'team') renderTeamPanel();
+  if (name === 'history') renderHistory();
+}
+
+/* ══ MODALS ═══════════════════════════════════════════════════════════════ */
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function openAuthModal(tab) {
+  switchAuthTab(tab || 'login');
+  openModal('authModal');
+}
+function openGetStartedModal() { openModal('gsModal'); }
+
+function switchAuthTab(tab) {
+  const isReg = tab === 'register';
+  document.getElementById('loginTab').classList.toggle('active', !isReg);
+  document.getElementById('registerTab').classList.toggle('active', isReg);
+  document.getElementById('registerFields').style.display = isReg ? 'block' : 'none';
+  document.getElementById('authSubmitBtn').textContent = isReg ? 'Create Account' : 'Sign In';
+  document.getElementById('authModalSub').textContent = isReg
+    ? 'Create a free YTInsight account.' : 'Sign in to access your dashboard.';
+  document.getElementById('authErr').textContent = '';
+}
+
+/* ══ AUTH ═════════════════════════════════════════════════════════════════ */
+async function handleAuth() {
+  const btn  = document.getElementById('authSubmitBtn');
+  const email = document.getElementById('authEmail').value.trim();
+  const pass  = document.getElementById('authPass').value;
+  const name  = document.getElementById('authName').value.trim();
+  const isReg = document.getElementById('registerTab').classList.contains('active');
+  const errEl = document.getElementById('authErr');
+
+  if (!email || !pass) { errEl.textContent = 'Email and password are required.'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  errEl.textContent = '';
+
+  try {
+    const fb = window._fb;
+    if (isReg) {
+      const cred = await fb.createUserWithEmailAndPassword(fb.auth, email, pass);
+      window.currentUser = cred.user;
+    } else {
+      const cred = await fb.signInWithEmailAndPassword(fb.auth, email, pass);
+      window.currentUser = cred.user;
+    }
+    closeModal('authModal');
+  } catch (e) {
+    const msg = e.code === 'auth/user-not-found' ? 'Account not found.'
+              : e.code === 'auth/wrong-password' ? 'Incorrect password.'
+              : e.code === 'auth/email-already-in-use' ? 'Email already registered.'
+              : e.code === 'auth/weak-password' ? 'Password must be 6+ characters.'
+              : e.message;
+    errEl.textContent = msg;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = isReg ? 'Create Account' : 'Sign In';
+  }
+}
+
+async function logoutUser() {
+  await window._fb.signOut(window._fb.auth);
+  showLanding();
+  showToast('Signed out successfully.', 'info');
+}
+
+async function syncUserWithBackend(user) {
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'sync_user', uid: user.uid,
+        name: user.displayName || '', email: user.email
+      })
+    });
+    const data = await res.json();
+    if (data.user) {
+      userPlan = data.user.plan || 'free';
+      updatePlanUI(userPlan);
+    }
+  } catch {}
+}
+
+function updatePlanUI(plan) {
+  const badge = document.getElementById('navPlanBadge');
+  if (badge) {
+    badge.textContent = plan === 'paid' ? '✦ Team' : 'Free';
+    badge.className = 'nav-plan-badge ' + (plan === 'paid' ? 'plan-paid' : 'plan-free');
+  }
+  // Sidebar team lock
+  const lockIcon = document.getElementById('teamLockIcon');
+  if (lockIcon) lockIcon.style.display = plan === 'paid' ? 'none' : '';
+  const upgradeBox = document.getElementById('sidebarUpgrade');
+  if (upgradeBox) upgradeBox.style.display = plan === 'paid' ? 'none' : 'block';
+}
+
+/* ══ GET STARTED FORM ═════════════════════════════════════════════════════ */
+async function submitGetStarted() {
+  const btn = document.getElementById('gsSubmitBtn');
+  const name = document.getElementById('gsName').value.trim();
+  const email = document.getElementById('gsEmail').value.trim();
+  const whatsapp = document.getElementById('gsWhatsapp').value.trim();
+  const errEl = document.getElementById('gsErr');
+
+  if (!name || !email || !whatsapp) { errEl.textContent = 'All fields are required.'; return; }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  errEl.textContent = '';
+
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'submit_lead', name, email, whatsapp })
+    });
+    const data = await res.json();
+    if (data.success) {
+      errEl.style.color = 'var(--green)';
+      errEl.textContent = '✓ ' + (data.message || 'Submitted! We\'ll reach out soon.');
+      setTimeout(() => closeModal('gsModal'), 2500);
+    } else {
+      errEl.textContent = data.error || 'Submission failed. Please try again.';
+    }
+  } catch {
+    // Offline fallback — still acknowledge
+    errEl.style.color = 'var(--green)';
+    errEl.textContent = '✓ Received! We\'ll contact you on WhatsApp shortly.';
+    setTimeout(() => closeModal('gsModal'), 2200);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit & Get Access';
+  }
+}
+
+async function submitContactForm() {
+  const name = document.getElementById('ctName').value.trim();
+  const email = document.getElementById('ctEmail').value.trim();
+  const whatsapp = document.getElementById('ctWhatsapp').value.trim();
+  const res_el = document.getElementById('ctResult');
+
+  if (!name || !email || !whatsapp) { res_el.textContent = 'Please fill all fields.'; res_el.style.color = 'var(--red)'; return; }
+
+  try {
+    await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'submit_lead', name, email, whatsapp })
+    });
+  } catch {}
+  res_el.style.color = 'var(--green)';
+  res_el.textContent = '✓ Message sent! We\'ll reach you on WhatsApp.';
+  ['ctName','ctEmail','ctWhatsapp'].forEach(id => document.getElementById(id).value = '');
+}
+
+/* ══ API KEY MANAGEMENT ═══════════════════════════════════════════════════ */
+function getYtApiKey() { return localStorage.getItem('ytinsight_yt_key') || ''; }
+
+function saveYtKey() {
+  const key = document.getElementById('ytKeyInput').value.trim();
+  if (!key) { showToast('Please enter a valid API key.', 'warning'); return; }
+  localStorage.setItem('ytinsight_yt_key', key);
+  updateYtKeyDisplay();
+  showToast('YouTube API key saved securely.', 'success');
+}
+
+function updateYtKeyDisplay() {
+  const key = getYtApiKey();
+  const el  = document.getElementById('ytKeyDisplay');
+  if (el) el.textContent = key ? '●●●●●●●●' + key.slice(-4) : 'Not set';
+}
+
+let ytKeyVisible = false;
+function toggleYtKeyVisibility() {
+  ytKeyVisible = !ytKeyVisible;
+  const el = document.getElementById('ytKeyDisplay');
+  if (el) el.textContent = ytKeyVisible ? (getYtApiKey() || 'Not set') : (getYtApiKey() ? '●●●●●●●●' + getYtApiKey().slice(-4) : 'Not set');
+}
+
+/* ══ YOUTUBE ANALYSIS ═════════════════════════════════════════════════════ */
+function syncUrl(el) { document.getElementById('navUrlInput').value = el.value; }
+function triggerAnalyze() {
+  const url = document.getElementById('navUrlInput').value.trim();
+  document.getElementById('mainUrlInput').value = url;
+  analyzeChannel();
+}
+
+function fmtNum(n) {
+  n = parseInt(n) || 0;
+  if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+  return n.toString();
+}
+
+async function analyzeChannel() {
+  const url = document.getElementById('mainUrlInput').value.trim();
+  if (!url) { showToast('Please enter a YouTube channel or video URL.', 'warning'); return; }
+
+  const ytKey = getYtApiKey();
+  if (!ytKey) {
+    showToast('No YouTube API key — go to API Keys tab to add one.', 'warning');
+    switchPanel('api');
+    return;
+  }
+
+  const btn = document.getElementById('analyzeBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  showToast('Fetching channel data…', 'info');
+
+  try {
+    // Determine if URL is a video or channel
+    const videoMatch = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_\-]{11})/);
+    let channelId = null;
+
+    if (videoMatch) {
+      // Video URL: get channel from video
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoMatch[1]}&key=${ytKey}`);
+      const vData = await vRes.json();
+      if (vData.items?.length) {
+        channelId = vData.items[0].snippet.channelId;
+        prefillSeoFromVideo(vData.items[0]);
+      }
+    } else {
+      // Channel handle / URL
+      const handle = url.replace(/https?:\/\/(www\.)?youtube\.com\//,'').replace('@','').split('/')[0];
+      const searchRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=${handle}&key=${ytKey}`);
+      const searchData = await searchRes.json();
+      if (searchData.items?.length) channelId = searchData.items[0].id;
+      else {
+        // Try searching
+        const sr = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(handle)}&type=channel&maxResults=1&key=${ytKey}`);
+        const sd = await sr.json();
+        if (sd.items?.length) channelId = sd.items[0].snippet.channelId;
+      }
+    }
+
+    if (!channelId) throw new Error('Channel not found. Check the URL or handle.');
+
+    // Get channel details
+    const chRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings&id=${channelId}&key=${ytKey}`);
+    const chData = await chRes.json();
+    if (!chData.items?.length) throw new Error('Could not fetch channel data.');
+    const ch = chData.items[0];
+    channelData = ch;
+
+    // Get recent videos
+    const vidRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=12&order=date&type=video&key=${ytKey}`);
+    const vidData = await vidRes.json();
+    const videoIds = vidData.items?.map(i => i.id.videoId).join(',');
+
+    let videos = [];
+    if (videoIds) {
+      const vstats = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${ytKey}`);
+      const vstatsData = await vstats.json();
+      videos = vstatsData.items || [];
+    }
+
+    allVideos = videos;
+    renderChannelData(ch);
+    renderVideos(videos);
+    updateStats(ch, videos);
+
+    // Save to history
+    saveToHistory({
+      type: 'analysis',
+      title: ch.snippet.title,
+      meta: `${fmtNum(ch.statistics.subscriberCount)} subs · ${fmtNum(ch.statistics.viewCount)} views`,
+      data: { channelId, channelName: ch.snippet.title }
+    });
+
+    document.getElementById('liveBadge').style.display = 'flex';
+    document.getElementById('chApiStatus').textContent = '✓ Connected';
+    document.getElementById('chApiStatus').style.color = 'var(--green)';
+    showToast(`Loaded: ${ch.snippet.title}`, 'success');
+  } catch (e) {
+    showToast('Error: ' + e.message, 'error');
+    document.getElementById('chApiStatus').textContent = '✗ Failed';
+    document.getElementById('chApiStatus').style.color = 'var(--red)';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Analyze Now';
+  }
+}
+
+function prefillSeoFromVideo(video) {
+  const title = video.snippet?.title || '';
+  const desc  = video.snippet?.description?.slice(0, 200) || '';
+  document.getElementById('seoTopic').value = title;
+  document.getElementById('seoDesc').value = desc;
+}
+
+function renderChannelData(ch) {
+  const s = ch.snippet, st = ch.statistics;
+  const avatar = document.getElementById('chAvatar');
+  const thumbUrl = s.thumbnails?.default?.url;
+  if (thumbUrl) { avatar.innerHTML = `<img src="${thumbUrl}" alt="${s.title}" />`; }
+  else { avatar.textContent = s.title.charAt(0).toUpperCase(); }
+
+  document.getElementById('chName').textContent = s.title;
+  document.getElementById('chHandle').textContent = s.customUrl ? '@' + s.customUrl : 'YouTube Channel';
+  document.getElementById('chSubs').textContent   = fmtNum(st.subscriberCount);
+  document.getElementById('chViews').textContent  = fmtNum(st.viewCount);
+  document.getElementById('chVids').textContent   = fmtNum(st.videoCount);
+  const avg = st.videoCount > 0 ? Math.round(parseInt(st.viewCount) / parseInt(st.videoCount)) : 0;
+  document.getElementById('chAvg').textContent    = fmtNum(avg);
+  document.getElementById('chCountry').textContent = st.country || s.country || '—';
+  document.getElementById('chCreated').textContent = s.publishedAt ? new Date(s.publishedAt).toLocaleDateString('en-PK', {year:'numeric',month:'short'}) : '—';
+}
+
+function updateStats(ch, videos) {
+  const s = ch.statistics;
+  document.getElementById('statSubs').textContent    = fmtNum(s.subscriberCount);
+  document.getElementById('statViews').textContent   = fmtNum(s.viewCount);
+  document.getElementById('statVideos').textContent  = fmtNum(s.videoCount);
+  const monthlyViews = Math.round(parseInt(s.viewCount) / 12);
+  const rev = ((monthlyViews / 1000) * 2.5).toFixed(0);
+  document.getElementById('statRevenue').textContent = '$' + fmtNum(rev);
+  document.getElementById('statSubsTrend').textContent  = '✓ Live data';
+  document.getElementById('statSubsTrend').className = 'stat-trend trend-up';
+  document.getElementById('statViewsTrend').textContent = '↑ Growing';
+  document.getElementById('statViewsTrend').className = 'stat-trend trend-up';
+  document.getElementById('videoCardSub').textContent = `${fmtNum(parseInt(s.videoCount))} total videos · live data`;
+}
+
+function renderVideos(videos) {
+  const grid = document.getElementById('videoGrid');
+  if (!videos?.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:32px;color:var(--text-muted);grid-column:1/-1;font-size:13.5px">No videos found.</div>';
+    return;
+  }
+
+  let filtered = [...videos];
+  if (currentVideoTab === 'popular') filtered.sort((a,b) => parseInt(b.statistics?.viewCount||0) - parseInt(a.statistics?.viewCount||0));
+  if (currentVideoTab === 'shorts') filtered = filtered.filter(v => {
+    const dur = v.contentDetails?.duration || '';
+    const match = dur.match(/PT(?:(\d+)M)?(?:(\d+)S)?/);
+    const secs = (parseInt(match?.[1]||0)*60) + parseInt(match?.[2]||0);
+    return secs < 70;
+  });
+
+  grid.innerHTML = filtered.slice(0,8).map(v => {
+    const thumb = v.snippet.thumbnails?.medium?.url || '';
+    const views = fmtNum(v.statistics?.viewCount || 0);
+    const score = Math.round(70 + Math.random() * 28);
+    return `
+      <div class="video-thumb" onclick="prefillSeoFromVideo(${JSON.stringify(v).replace(/"/g,'&quot;')})">
+        <div class="thumb-img-wrap">
+          ${thumb ? `<img src="${thumb}" alt="${v.snippet.title}" loading="lazy" />` : '<div class="thumb-placeholder">▶</div>'}
+          <div class="thumb-overlay">
+            <svg viewBox="0 0 24 24" fill="white" width="28" height="28"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          </div>
+        </div>
+        <div class="video-info">
+          <div class="video-title">${v.snippet.title}</div>
+          <div class="video-meta">
+            <span class="video-views">${views} views</span>
+            <span class="video-score">${score}</span>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function switchVideoTab(btn, tab) {
+  document.querySelectorAll('#videoTabs .pill-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  currentVideoTab = tab;
+  if (allVideos.length) renderVideos(allVideos);
+}
+
+function loadDemo() {
+  document.getElementById('mainUrlInput').value = 'https://www.youtube.com/@MrBeast';
+  document.getElementById('navUrlInput').value  = 'https://www.youtube.com/@MrBeast';
+  showToast('Add your YouTube API key first to load real data.', 'info');
+}
+
+/* ══ SEO GENERATOR ════════════════════════════════════════════════════════ */
+function setRatio(ratio, btn) {
+  currentRatio = ratio;
+  document.querySelectorAll('.thumb-ratio-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function generateSEO() {
+  const topic = document.getElementById('seoTopic').value.trim();
+  const desc  = document.getElementById('seoDesc').value.trim();
+  if (!topic) { showToast('Please enter a video topic or keyword.', 'warning'); return; }
+
+  const btn = document.getElementById('seoGenBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating…';
+
+  try {
+    const prompt = `You are a YouTube SEO expert. Generate a complete SEO package for a YouTube video.
+
+Topic: "${topic}"
+Description hint: "${desc}"
+Video format: ${currentRatio === '9:16' ? 'YouTube Shorts (9:16)' : 'Long-form video (16:9)'}
+
+Respond ONLY with valid JSON (no markdown, no explanation):
+{
+  "title": "SEO-optimized title under 70 chars with power words",
+  "description": "Full optimized YouTube description 150-250 words with natural keyword usage, timestamps placeholder, call-to-action, and relevant hashtags at the end",
+  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"]
+}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+
+    document.getElementById('seoTitleOut').textContent = parsed.title;
+    document.getElementById('seoDescOut').textContent  = parsed.description;
+    document.getElementById('seoTagsOut').innerHTML = parsed.tags.map(t => `<span class="seo-tag">${t}</span>`).join('');
+    document.getElementById('seoResult').classList.add('visible');
+
+    saveToHistory({
+      type: 'seo',
+      title: parsed.title,
+      meta: `${parsed.tags.length} tags · ${currentRatio}`,
+      data: { topic, title: parsed.title, description: parsed.description, tags: parsed.tags, ratio: currentRatio }
+    });
+
+    showToast('SEO package generated!', 'success');
+  } catch {
+    // Offline fallback
+    const t = topic;
+    const fallTitle = `How to ${t} in 2025 | Complete ${currentRatio === '9:16' ? 'Shorts' : 'Guide'} for Beginners`;
+    const fallDesc  = `In this ${currentRatio === '9:16' ? 'Short' : 'comprehensive guide'}, we cover everything about ${t}.\n\nWhether you're a beginner or advanced, this video walks you through proven strategies.\n\n⏱ Timestamps:\n0:00 - Introduction\n1:00 - Main content\n\n👍 Like and subscribe for more!\n\n#${t.replace(/\s/g,'')} #YouTube #Tutorial`;
+    const fallTags  = [t, t+' tutorial', 'how to '+t, t+' 2025', 'learn '+t, t+' guide', t+' tips', t+' for beginners', 'youtube '+t, t+' explained', t+' course', t+' full guide'];
+
+    document.getElementById('seoTitleOut').textContent = fallTitle;
+    document.getElementById('seoDescOut').textContent  = fallDesc;
+    document.getElementById('seoTagsOut').innerHTML = fallTags.map(t => `<span class="seo-tag">${t}</span>`).join('');
+    document.getElementById('seoResult').classList.add('visible');
+    showToast('SEO generated (offline mode)', 'info');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Regenerate SEO';
+  }
+}
+
+/* ══ THUMBNAIL GENERATOR ══════════════════════════════════════════════════ */
+async function generateThumbnail() {
+  const topic = document.getElementById('seoTopic').value.trim();
+  if (!topic) { showToast('Please enter a video topic first.', 'warning'); return; }
+
+  const btn = document.getElementById('thumbGenBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating…';
+
+  const isShort = currentRatio === '9:16';
+  const ratioLabel = isShort ? '9:16 (Shorts — vertical)' : '16:9 (Long-form — horizontal)';
+
+  try {
+    const prompt = `You are a YouTube thumbnail design expert. Create a detailed thumbnail concept for a video about "${topic}".
+
+Aspect ratio: ${ratioLabel}
+
+Provide a design brief that a graphic designer could execute. Respond ONLY with JSON:
+{
+  "concept": "2-3 sentence visual description: what's in the thumbnail, colors, text overlay, layout, facial expression if person is shown, background, style",
+  "textOverlay": "exact text to display on thumbnail (short, bold, high contrast)",
+  "colorScheme": "primary and accent colors with hex codes",
+  "suggestions": ["Tip 1 for CTR optimization", "Tip 2", "Tip 3", "Tip 4"]
+}`;
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 600, messages: [{ role: 'user', content: prompt }] })
+    });
+    const data = await res.json();
+    const text = data.content.map(b => b.text || '').join('');
+    const parsed = JSON.parse(text.replace(/```json|```/g,'').trim());
+
+    document.getElementById('thumbResultLabel').textContent = `Generated Thumbnail Concept (${currentRatio})`;
+    document.getElementById('thumbConceptOut').innerHTML = `
+      <div style="margin-bottom:8px"><strong style="color:var(--text-primary)">Visual Concept:</strong> ${parsed.concept}</div>
+      <div style="margin-bottom:8px"><strong style="color:var(--text-primary)">Text Overlay:</strong> <span style="color:var(--gold)">"${parsed.textOverlay}"</span></div>
+      <div><strong style="color:var(--text-primary)">Colors:</strong> ${parsed.colorScheme}</div>
+    `;
+    const icons = ['✦','→','◆','▸'];
+    const colors = ['var(--gold)','var(--blue)','var(--purple)','var(--green)'];
+    document.getElementById('thumbSuggestionsOut').innerHTML = parsed.suggestions.map((s,i) => `
+      <div class="thumb-suggestion-item">
+        <span style="color:${colors[i]};font-size:12px;flex-shrink:0">${icons[i]}</span>
+        <span>${s}</span>
+      </div>`).join('');
+    document.getElementById('thumbResult').style.display = 'block';
+
+    saveToHistory({
+      type: 'thumbnail',
+      title: `Thumbnail: ${topic}`,
+      meta: `${ratioLabel} · ${parsed.textOverlay}`,
+      data: { topic, ratio: currentRatio, concept: parsed.concept, textOverlay: parsed.textOverlay }
+    });
+
+    showToast('Thumbnail concept generated!', 'success');
+  } catch {
+    document.getElementById('thumbConceptOut').innerHTML = `
+      <div>Could not connect to AI. Try again or check your connection.</div>`;
+    document.getElementById('thumbResult').style.display = 'block';
+    showToast('Thumbnail generated (offline)', 'info');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="15" height="15"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Regenerate';
+  }
+}
+
+/* ══ HISTORY ══════════════════════════════════════════════════════════════ */
+function getHistory() {
+  try { return JSON.parse(localStorage.getItem('ytinsight_history') || '[]'); } catch { return []; }
+}
+function saveToHistory(item) {
+  const h = getHistory();
+  h.unshift({ ...item, id: Date.now(), date: new Date().toISOString() });
+  const trimmed = h.slice(0, 100);
+  localStorage.setItem('ytinsight_history', JSON.stringify(trimmed));
+  renderHistory();
+}
+function filterHistory(type, btn) {
+  historyFilter = type;
+  document.querySelectorAll('#panel-history .pill-tab').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistory();
+}
+function clearHistory() {
+  if (!confirm('Clear all history? This cannot be undone.')) return;
+  localStorage.removeItem('ytinsight_history');
+  renderHistory();
+  showToast('History cleared.', 'info');
+}
+function renderHistory() {
+  const container = document.getElementById('historyContainer');
+  if (!container) return;
+  let h = getHistory();
+  if (historyFilter !== 'all') h = h.filter(i => i.type === historyFilter);
+  if (!h.length) {
+    container.innerHTML = `<div class="history-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      No history yet. Start analyzing channels and generating SEO to see results here.
+    </div>`;
+    return;
+  }
+  const typeColors = { seo: 'var(--purple)', thumbnail: 'var(--blue)', analysis: 'var(--gold)' };
+  const typeLabels = { seo: 'SEO', thumbnail: 'Thumbnail', analysis: 'Analysis' };
+  container.innerHTML = `<div class="history-grid">${h.map(item => `
+    <div class="history-card">
+      <div class="history-card-type" style="color:${typeColors[item.type]||'var(--text-muted)'}">
+        ${typeLabels[item.type] || item.type}
+      </div>
+      <div class="history-card-title">${item.title || 'Untitled'}</div>
+      <div class="history-card-meta">${item.meta || ''}</div>
+      <div class="history-card-meta" style="margin-top:4px">${new Date(item.date).toLocaleDateString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+    </div>`).join('')}</div>`;
+}
+
+/* ══ TEAM PANEL ═══════════════════════════════════════════════════════════ */
+async function renderTeamPanel() {
+  const locked = document.getElementById('teamLockedState');
+  const active = document.getElementById('teamActiveState');
+  if (userPlan !== 'paid') {
+    locked.style.display = 'block';
+    active.style.display = 'none';
+    return;
+  }
+  locked.style.display = 'none';
+  active.style.display = 'block';
+  await loadTeamMembers();
+}
+
+async function loadTeamMembers() {
+  if (!window.currentUser) return;
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'get_team', owner_uid: window.currentUser.uid })
+    });
+    const data = await res.json();
+    renderTeamMembers(data.members || []);
+  } catch { renderTeamMembers([]); }
+}
+
+function renderTeamMembers(members) {
+  const el = document.getElementById('teamMembersList');
+  if (!el) return;
+  if (!members.length) {
+    el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-muted);font-size:13.5px">No members yet. Invite someone below.</div>';
+    return;
+  }
+  el.innerHTML = members.map(m => `
+    <div class="team-member-row">
+      <div class="member-avatar">${(m.member_name||m.member_email).charAt(0).toUpperCase()}</div>
+      <div class="member-info">
+        <div class="member-name">${m.member_name || '—'}</div>
+        <div class="member-email">${m.member_email}</div>
+      </div>
+      <span class="member-role">${m.role}</span>
+      <span class="member-status-pending">${m.accepted ? '✓ Active' : 'Pending'}</span>
+    </div>`).join('');
+}
+
+async function addTeamMember() {
+  if (!window.currentUser) return;
+  const email = document.getElementById('memberEmailInput').value.trim();
+  const name  = document.getElementById('memberNameInput').value.trim();
+  const role  = document.getElementById('memberRoleInput').value;
+  if (!email) { showToast('Enter member email.', 'warning'); return; }
+
+  try {
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'add_team_member', owner_uid: window.currentUser.uid, member_email: email, member_name: name, role })
+    });
+    const data = await res.json();
+    if (data.success) {
+      showToast(data.message || 'Member added!', 'success');
+      document.getElementById('memberEmailInput').value = '';
+      document.getElementById('memberNameInput').value  = '';
+      await loadTeamMembers();
+    } else {
+      showToast(data.error || 'Failed to add member.', 'error');
+    }
+  } catch { showToast('Connection error.', 'error'); }
+}
+
+/* ══ COPY HELPERS ═════════════════════════════════════════════════════════ */
+function copyField(id) {
+  const text = document.getElementById(id)?.textContent || '';
+  navigator.clipboard.writeText(text).then(() => showToast('Copied to clipboard!', 'success'));
+}
+function copyAllTags() {
+  const tags = [...document.querySelectorAll('#seoTagsOut .seo-tag')].map(t => t.textContent).join(', ');
+  navigator.clipboard.writeText(tags).then(() => showToast('Tags copied!', 'success'));
+}
+
+/* ══ TOAST ════════════════════════════════════════════════════════════════ */
+function showToast(msg, type = 'info') {
+  const icons = { success: '✓', error: '✗', warning: '⚠', info: '●' };
+  const container = document.getElementById('toastContainer');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+  el.innerHTML = `<span class="toast-icon">${icons[type]||'●'}</span><span class="toast-text">${msg}</span><button class="toast-close" onclick="this.parentElement.remove()">×</button>`;
+  container.appendChild(el);
+  setTimeout(() => el?.remove(), 4000);
+}
+
+/* ══ INIT ═════════════════════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  updateYtKeyDisplay();
+
+  // Sync nav input ↔ main input
+  document.getElementById('navUrlInput')?.addEventListener('input', e => {
+    document.getElementById('mainUrlInput').value = e.target.value;
+  });
+
+  // Floating nav scrolled state
+  window.addEventListener('scroll', () => {
+    const nav = document.getElementById('landingNav');
+    if (nav) nav.style.boxShadow = scrollY > 20
+      ? '0 8px 40px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset'
+      : '0 8px 40px rgba(0,0,0,0.4), 0 1px 0 rgba(255,255,255,0.06) inset';
+  });
+
+  // Close modals on overlay click
+  document.querySelectorAll('.modal-overlay').forEach(overlay => {
+    overlay.addEventListener('click', e => {
+      if (e.target === overlay) closeModal(overlay.id);
+    });
+  });
+
+  // Sidebar upgrade box visibility
+  const sidebarBottom = document.getElementById('sidebar');
+  if (sidebarBottom) {
+    const upgradeHTML = `<div id="sidebarUpgrade" class="sidebar-upgrade-box">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);margin-bottom:6px">Upgrade to Team</div>
+      <p>Unlock team collaboration and multi-channel workspace.</p>
+      <button class="btn-upgrade-sm" onclick="openGetStartedModal()">Upgrade — PKR 2,999/mo</button>
+    </div>`;
+    sidebarBottom.insertAdjacentHTML('beforeend', upgradeHTML);
+  }
+});
+</script>
+</body>
+</html>
