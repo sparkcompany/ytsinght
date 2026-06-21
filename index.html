@@ -1,4 +1,4 @@
- <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8" />
@@ -23,6 +23,8 @@
     appId: "1:77653986140:web:4a3b0f1895ddad1664cf99",
     measurementId: "G-BJE7GM34DJ"
   };
+  // OAuth2 Client ID for YouTube scope requests
+  window.GOOGLE_CLIENT_ID = '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com';
 
   const app  = initializeApp(firebaseConfig);
   const auth = getAuth(app);
@@ -767,6 +769,11 @@ textarea.cf-input { height: 100px; padding: 12px 14px; resize: none; }
 .toast-text { font-size: 12.5px; color: var(--text-primary); flex: 1; }
 .toast-close { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 15px; }
 
+/* ── My Channel grid ── */
+.mc-grid { display: grid; grid-template-columns: 1fr 300px; gap: 16px; }
+@media (max-width: 900px) { .mc-grid { grid-template-columns: 1fr !important; } }
+#uploadDropZone:hover { border-color: var(--gold); background: var(--gold-dim); }
+
 /* ══ SKELETON ═════════════════════════════════════════════════════════════ */
 .skeleton { background-size: 200% 100%; background-image: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%); animation: shimmer 1.5s infinite; border-radius: var(--radius-sm); }
 .skel-line { height: 11px; margin-bottom: 7px; }
@@ -1506,93 +1513,236 @@ textarea.cf-input { height: 100px; padding: 12px 14px; resize: none; }
 
       <!-- ── MY CHANNEL PANEL ── -->
       <div class="dash-panel" id="panel-mychannel">
-        <div style="margin-bottom:20px">
-          <div class="card-eyebrow">Your Channel</div>
-          <div class="card-title" style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text-primary)">My Channel</div>
-          <div style="font-size:13px;color:var(--text-secondary);margin-top:3px">Connect your YouTube channel to unlock full analytics, video breakdowns, and AI performance predictions.</div>
+        <div style="margin-bottom:20px;display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+          <div>
+            <div class="card-eyebrow">Your Channel</div>
+            <div class="card-title" style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--text-primary)">My Channel</div>
+            <div style="font-size:13px;color:var(--text-secondary);margin-top:3px">Connect your YouTube channel — full analytics, upload videos with AI SEO, and performance predictions.</div>
+          </div>
+          <div id="mcConnectedActions" style="display:none;gap:8px;flex-wrap:wrap">
+            <button class="btn-sm" style="background:linear-gradient(135deg,var(--red),#E03030);color:#fff;border:none" onclick="openUploadModal()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Upload Video
+            </button>
+            <button class="btn-sm" onclick="connectYouTubeChannel()" style="background:rgba(255,255,255,0.06)">↻ Refresh</button>
+          </div>
         </div>
 
         <!-- Not connected state -->
         <div id="mcNotConnected" class="dash-card" style="text-align:center;padding:50px 24px">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48" style="opacity:.25;margin:0 auto 14px;display:block;color:var(--text-muted)"><path d="M22.54 6.42a2.78 2.78 0 0 0-1.94-2C18.88 4 12 4 12 4s-6.88 0-8.6.46a2.78 2.78 0 0 0-1.94 2A29 29 0 0 0 1 11.75a29 29 0 0 0 .46 5.33A2.78 2.78 0 0 0 3.4 19c1.72.46 8.6.46 8.6.46s6.88 0 8.6-.46a2.78 2.78 0 0 0 1.94-2 29 29 0 0 0 .46-5.25 29 29 0 0 0-.46-5.33z"/><polygon points="9.75 15.02 15.5 11.75 9.75 8.48 9.75 15.02"/></svg>
           <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:700;margin-bottom:7px;color:var(--text-primary)">No Channel Connected</div>
-          <p style="font-size:13.5px;color:var(--text-secondary);max-width:340px;margin:0 auto 20px;line-height:1.6">Connect your YouTube channel once — we'll securely pull your stats, videos, and performance data automatically using your account.</p>
-          <button class="btn-plan gold" style="width:auto;padding:0 28px;height:42px" onclick="connectYouTubeChannel()" id="mcConnectBtn">
+          <p style="font-size:13.5px;color:var(--text-secondary);max-width:380px;margin:0 auto 20px;line-height:1.6">Connect your YouTube channel once — we'll securely pull your full stats, videos, watch time, likes, country, category, and more using your Google account.</p>
+          <button class="btn-plan gold" style="width:auto;padding:0 28px;height:44px;font-size:14px" onclick="connectYouTubeChannel()" id="mcConnectBtn">
             <svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" style="margin-right:7px;vertical-align:-2px"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.4 3.6z"/></svg>
             Connect YouTube Channel
           </button>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:12px">Uses secure Google sign-in via Firebase — we never see or store your password.</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:12px">Uses secure Google OAuth — we never see or store your Google password.</div>
         </div>
 
         <!-- Connected state -->
         <div id="mcConnected" style="display:none">
-          <div class="dashboard-grid" style="display:grid;grid-template-columns:1fr 320px;gap:18px">
-            <div class="dash-card">
-              <div class="card-header">
-                <div>
-                  <div class="card-eyebrow">Overview</div>
-                  <div class="card-title">Channel Performance</div>
+
+          <!-- Channel profile + full details -->
+          <div style="display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:16px" class="mc-grid">
+
+            <!-- Left: Stats + Videos -->
+            <div>
+              <!-- Channel Profile Card -->
+              <div class="dash-card" style="margin-bottom:14px">
+                <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px">
+                  <div class="channel-avatar" id="mcAvatar" style="width:56px;height:56px;font-size:20px;flex-shrink:0">YT</div>
+                  <div style="flex:1;min-width:0">
+                    <div class="channel-name" id="mcName" style="font-size:17px">—</div>
+                    <div class="channel-handle" id="mcHandle" style="font-size:13px">—</div>
+                    <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap">
+                      <span class="card-badge badge-live" style="display:none" id="mcLiveBadge">● LIVE</span>
+                      <span class="card-badge badge-pro" id="mcCategoryBadge" style="display:none"></span>
+                      <span class="card-badge" style="background:var(--blue-dim);color:var(--blue);border:1px solid rgba(74,158,255,.25)" id="mcCountryBadge" style="display:none"></span>
+                    </div>
+                  </div>
                 </div>
-                <button class="copy-btn" style="position:static" onclick="connectYouTubeChannel()">↻ Refresh</button>
+
+                <!-- 8 stat grid -->
+                <div class="ch-stats-grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px" id="mcStatsGrid">
+                  <div class="ch-stat"><div class="ch-stat-label">Subscribers</div><div class="ch-stat-val" id="mcSubs">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Total Views</div><div class="ch-stat-val" id="mcViewsTotal">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Watch Time</div><div class="ch-stat-val" id="mcWatchTime">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Total Likes</div><div class="ch-stat-val" id="mcLikes">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Today's Views</div><div class="ch-stat-val" id="mcViewsToday">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Yesterday</div><div class="ch-stat-val" id="mcViewsYesterday">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">This Month</div><div class="ch-stat-val" id="mcViewsMonth">—</div></div>
+                  <div class="ch-stat"><div class="ch-stat-label">Videos</div><div class="ch-stat-val" id="mcVideoCount">—</div></div>
+                </div>
+                <div class="divider"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                  <div class="info-row"><span class="info-row-key">Country</span><span class="info-row-val" id="mcCountry">—</span></div>
+                  <div class="info-row"><span class="info-row-key">Category</span><span class="info-row-val" id="mcCategory">—</span></div>
+                  <div class="info-row"><span class="info-row-key">Created</span><span class="info-row-val" id="mcCreated">—</span></div>
+                  <div class="info-row"><span class="info-row-key">Last Synced</span><span class="info-row-val" id="mcLastSync">—</span></div>
+                </div>
               </div>
-              <div class="ch-stats-grid" id="mcStatsGrid" style="grid-template-columns:repeat(3,1fr);gap:10px">
-                <div class="ch-stat"><div class="ch-stat-label">Today's Views</div><div class="ch-stat-val" id="mcViewsToday">—</div></div>
-                <div class="ch-stat"><div class="ch-stat-label">Yesterday</div><div class="ch-stat-val" id="mcViewsYesterday">—</div></div>
-                <div class="ch-stat"><div class="ch-stat-label">This Month</div><div class="ch-stat-val" id="mcViewsMonth">—</div></div>
-                <div class="ch-stat"><div class="ch-stat-label">Total Views</div><div class="ch-stat-val" id="mcViewsTotal">—</div></div>
-                <div class="ch-stat"><div class="ch-stat-label">Subscribers</div><div class="ch-stat-val" id="mcSubs">—</div></div>
-                <div class="ch-stat"><div class="ch-stat-label">Total Likes</div><div class="ch-stat-val" id="mcLikes">—</div></div>
+
+              <!-- Videos list -->
+              <div class="dash-card">
+                <div class="card-header" style="margin-bottom:12px">
+                  <div>
+                    <div class="card-eyebrow">Your Videos</div>
+                    <div class="card-title">Recent Uploads</div>
+                  </div>
+                  <div class="pill-tabs" style="margin:0">
+                    <button class="pill-tab active" onclick="filterMcVideos('all',this)">All</button>
+                    <button class="pill-tab" onclick="filterMcVideos('long',this)">Long-form</button>
+                    <button class="pill-tab" onclick="filterMcVideos('short',this)">Shorts</button>
+                  </div>
+                </div>
+                <div id="mcVideoList"></div>
               </div>
-              <div class="divider"></div>
-              <div class="card-eyebrow" style="margin-bottom:10px">Your Videos</div>
-              <div id="mcVideoList"></div>
             </div>
 
-            <div class="dash-card">
-              <div class="card-header">
-                <div>
-                  <div class="card-eyebrow">Channel</div>
-                  <div class="card-title">Profile</div>
+            <!-- Right: Connection + Upload history -->
+            <div>
+              <div class="dash-card" style="margin-bottom:14px">
+                <div class="card-header" style="margin-bottom:12px">
+                  <div class="card-title">Connection</div>
+                  <div class="card-badge badge-ai" style="color:var(--green)">✓ Connected</div>
+                </div>
+                <div class="info-row"><span class="info-row-key">Status</span><span class="info-row-val" style="color:var(--green)">✓ Live</span></div>
+                <div class="info-row"><span class="info-row-key">Channel ID</span><span class="info-row-val" id="mcChannelId" style="font-family:monospace;font-size:10px;word-break:break-all">—</span></div>
+                <div style="margin-top:14px;display:flex;flex-direction:column;gap:7px">
+                  <button class="btn-plan gold" style="width:100%;height:38px;font-size:12.5px" onclick="openUploadModal()">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    Upload New Video
+                  </button>
+                  <button class="copy-btn" style="position:static;width:100%;height:34px;color:var(--red)" onclick="disconnectYouTubeChannel()">Disconnect Channel</button>
                 </div>
               </div>
-              <div class="channel-profile" id="mcProfile">
-                <div class="channel-avatar" id="mcAvatar">YT</div>
-                <div>
-                  <div class="channel-name" id="mcName">—</div>
-                  <div class="channel-handle" id="mcHandle">—</div>
-                </div>
+
+              <!-- Uploaded videos history -->
+              <div class="dash-card">
+                <div class="card-eyebrow" style="margin-bottom:10px">Uploads via YTInsight</div>
+                <div id="mcUploadHistory"><div style="text-align:center;padding:18px;color:var(--text-muted);font-size:12.5px">No uploads yet via this platform.</div></div>
               </div>
-              <div class="divider"></div>
-              <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;font-weight:500">Connection</div>
-              <div class="info-row"><span class="info-row-key">Status</span><span class="info-row-val" style="color:var(--green)">✓ Connected</span></div>
-              <div class="info-row"><span class="info-row-key">Last Synced</span><span class="info-row-val" id="mcLastSync">—</span></div>
-              <button class="copy-btn" style="position:static;width:100%;margin-top:12px;color:var(--red)" onclick="disconnectYouTubeChannel()">Disconnect Channel</button>
             </div>
           </div>
 
-          <!-- Video analysis / prediction modal area -->
-          <div class="dash-card" id="mcVideoAnalysis" style="display:none;margin-top:16px">
+          <!-- Video AI Prediction Panel -->
+          <div class="dash-card" id="mcVideoAnalysis" style="display:none;margin-top:4px">
             <div class="card-header">
               <div>
-                <div class="card-eyebrow">AI Prediction</div>
+                <div class="card-eyebrow">AI Performance Prediction & Analytics</div>
                 <div class="card-title" id="mcAnalysisTitle">Video Analysis</div>
               </div>
-              <button class="copy-btn" style="position:static" onclick="document.getElementById('mcVideoAnalysis').style.display='none'">Close</button>
+              <button class="copy-btn" style="position:static" onclick="document.getElementById('mcVideoAnalysis').style.display='none'">✕ Close</button>
             </div>
-            <div class="ch-stats-grid" style="grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px">
+            <div class="ch-stats-grid" style="grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px">
               <div class="ch-stat"><div class="ch-stat-label">Views</div><div class="ch-stat-val" id="mcVaViews">—</div></div>
               <div class="ch-stat"><div class="ch-stat-label">Subs Gained</div><div class="ch-stat-val" id="mcVaSubs">—</div></div>
               <div class="ch-stat"><div class="ch-stat-label">Watch Time</div><div class="ch-stat-val" id="mcVaWatch">—</div></div>
+              <div class="ch-stat"><div class="ch-stat-label">Avg View Duration</div><div class="ch-stat-val" id="mcVaAvgDur">—</div></div>
             </div>
             <div class="keyword-result-card">
               <div class="kw-score-label">
-                <span style="color:var(--text-muted)">Predicted Performance</span>
+                <span style="color:var(--text-muted)">AI Performance Score</span>
                 <span class="kw-score-val" id="mcVaPredVal" style="color:var(--green)">—</span>
               </div>
-              <div class="keyword-score-bar">
-                <div class="keyword-score-fill" id="mcVaPredFill" style="width:0%;background:var(--green)"></div>
+              <div class="keyword-score-bar"><div class="keyword-score-fill" id="mcVaPredFill" style="width:0%;background:var(--green)"></div></div>
+              <div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)" id="mcVaPredNote">Click a video above to analyze it.</div>
+            </div>
+            <!-- Mini analytics chart placeholder -->
+            <div id="mcVaChartWrap" style="display:none;margin-top:14px">
+              <div style="font-size:11.5px;color:var(--text-muted);margin-bottom:8px;font-weight:500">Views — Last 7 Days</div>
+              <canvas id="mcVaChart" height="80" style="width:100%"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── VIDEO UPLOAD MODAL ── -->
+      <div class="modal-overlay" id="uploadModal">
+        <div class="modal-box" style="max-width:640px;width:95vw">
+          <div class="modal-header">
+            <div class="modal-title">Upload Video to YouTube</div>
+            <button class="modal-close" onclick="closeModal('uploadModal')">×</button>
+          </div>
+          <div style="padding:0 20px 20px">
+
+            <!-- Video file picker -->
+            <div style="border:2px dashed var(--glass-border);border-radius:var(--radius-md);padding:22px;text-align:center;margin-bottom:14px;cursor:pointer;transition:var(--transition)" id="uploadDropZone" onclick="document.getElementById('videoFileInput').click()" ondragover="event.preventDefault();this.style.borderColor='var(--gold)'" ondragleave="this.style.borderColor='var(--glass-border)'" ondrop="handleVideoDrop(event)">
+              <input type="file" id="videoFileInput" accept="video/*" style="display:none" onchange="handleVideoSelect(event)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="36" height="36" style="margin:0 auto 8px;display:block;color:var(--text-muted)"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--text-primary);margin-bottom:4px" id="uploadFileName">Click or drag video here</div>
+              <div style="font-size:12px;color:var(--text-muted)">MP4, MOV, AVI · Max 256GB (YouTube limit)</div>
+            </div>
+
+            <!-- Upload progress -->
+            <div id="uploadProgressWrap" style="display:none;margin-bottom:14px">
+              <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-muted);margin-bottom:5px">
+                <span>Uploading…</span><span id="uploadProgressPct">0%</span>
               </div>
-              <div style="margin-top:10px;font-size:12.5px;color:var(--text-secondary)" id="mcVaPredNote">Analysis available 6 hours after publish.</div>
+              <div style="height:5px;background:var(--glass-border);border-radius:99px;overflow:hidden">
+                <div id="uploadProgressBar" style="height:100%;width:0%;background:linear-gradient(90deg,var(--red),var(--gold));border-radius:99px;transition:width .3s"></div>
+              </div>
+            </div>
+
+            <!-- Title -->
+            <div class="modal-field">
+              <label class="modal-label">Video Title <span style="color:var(--red)">*</span></label>
+              <input class="modal-input" id="uploadTitle" placeholder="Enter a compelling title…" style="width:100%">
+            </div>
+
+            <!-- Description -->
+            <div class="modal-field">
+              <label class="modal-label" style="display:flex;align-items:center;justify-content:space-between">
+                Description
+                <button class="copy-btn" style="position:static;font-size:10.5px" onclick="aiGenerateUploadContent()">✦ AI Generate SEO</button>
+              </label>
+              <textarea class="modal-input" id="uploadDescription" placeholder="Write your description or click AI Generate SEO…" rows="4" style="width:100%;resize:vertical"></textarea>
+            </div>
+
+            <!-- Keywords/Tags -->
+            <div class="modal-field">
+              <label class="modal-label">Keywords / Tags</label>
+              <input class="modal-input" id="uploadTags" placeholder="tag1, tag2, tag3 (comma separated)" style="width:100%">
+            </div>
+
+            <!-- Hashtags -->
+            <div class="modal-field">
+              <label class="modal-label">Hashtags</label>
+              <input class="modal-input" id="uploadHashtags" placeholder="#youtube #shorts #viral" style="width:100%">
+            </div>
+
+            <!-- Publish options -->
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+              <div>
+                <label class="modal-label">Visibility</label>
+                <select class="modal-input" id="uploadPrivacy" style="width:100%" onchange="toggleScheduleField()">
+                  <option value="public">Public — Publish Now</option>
+                  <option value="private" selected>Private</option>
+                  <option value="unlisted">Unlisted</option>
+                  <option value="scheduled">Scheduled (set date below)</option>
+                </select>
+              </div>
+              <div id="uploadScheduleWrap" style="display:none">
+                <label class="modal-label">Schedule Date & Time</label>
+                <input class="modal-input" type="datetime-local" id="uploadScheduleAt" style="width:100%">
+              </div>
+            </div>
+
+            <!-- AI SEO result preview (hidden until generated) -->
+            <div id="uploadAiPreview" style="display:none;background:var(--bg-card);border:1px solid var(--gold-border);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+              <div style="font-size:11px;font-weight:600;color:var(--gold);margin-bottom:7px;letter-spacing:.07em">✦ AI-GENERATED SEO — EDIT BEFORE PUBLISHING</div>
+              <div style="font-size:12.5px;color:var(--text-secondary)" id="uploadAiNote"></div>
+            </div>
+
+            <div id="uploadResult" style="font-size:12.5px;min-height:16px;margin-bottom:10px"></div>
+
+            <div style="display:flex;gap:8px">
+              <button class="btn-modal-submit" id="uploadSubmitBtn" onclick="submitVideoUpload()" style="flex:1;background:linear-gradient(135deg,var(--red),#C41A1A)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Upload to YouTube
+              </button>
+              <button class="copy-btn" style="position:static;height:40px;padding:0 16px" onclick="closeModal('uploadModal')">Cancel</button>
             </div>
           </div>
         </div>
@@ -2157,6 +2307,8 @@ function parseAIJSON(text) {
   } catch {}
   throw new Error('Could not parse AI response. Try again.');
 }
+// Alias so both names work
+const parseJSON = parseAIJSON;
 
 /* ══ YOUTUBE ANALYSIS ═════════════════════════════════════════════════════ */
 function syncUrl(el) { document.getElementById('navUrlInput').value = el.value; }
@@ -2428,29 +2580,41 @@ function downloadThumbnailPrompt() {
 }
 
 /* ══ MY CHANNEL ═══════════════════════════════════════════════════════════ */
-// NOTE: This connects via Firebase Auth (Google provider scoped to YouTube readonly)
-// and the backend (api.php) exchanges the token + calls YouTube Data/Analytics API
-// using the rotating server-side keys. Frontend just triggers + renders.
-window._myChannel = null; // cached channel object once connected
+// OAuth Client ID for YouTube scopes
+const YT_OAUTH_CLIENT_ID = '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com';
+
+window._myChannel  = null;
+window._mcAccessToken = null;
+let _mcVideoFilter = 'all';
+let _selectedUploadFile = null;
 
 async function renderMyChannelPanel() {
   const notConnected = document.getElementById('mcNotConnected');
-  const connected     = document.getElementById('mcConnected');
-  if (!window.currentUser) { notConnected.style.display = 'block'; connected.style.display = 'none'; return; }
+  const connected    = document.getElementById('mcConnected');
+  const actions      = document.getElementById('mcConnectedActions');
+  if (!window.currentUser) {
+    notConnected.style.display = 'block'; connected.style.display = 'none';
+    if (actions) actions.style.display = 'none';
+    return;
+  }
   try {
-    const snap = await window.fbGet ? await window.fbGet(`users/${window.currentUser.uid}/myChannel`) : null;
-    if (snap && snap.exists && snap.exists()) {
+    const fb   = window._fb;
+    const snap = await fb.get(fb.ref(fb.db, `users/${window.currentUser.uid}/myChannel`));
+    if (snap.exists()) {
       window._myChannel = snap.val();
+      window._mcAccessToken = window._myChannel.accessToken || null;
       notConnected.style.display = 'none';
-      connected.style.display = 'block';
+      connected.style.display    = 'block';
+      if (actions) actions.style.display = 'flex';
       renderMyChannelData(window._myChannel);
     } else {
       notConnected.style.display = 'block';
-      connected.style.display = 'none';
+      connected.style.display    = 'none';
+      if (actions) actions.style.display = 'none';
     }
   } catch(e) {
     notConnected.style.display = 'block';
-    connected.style.display = 'none';
+    connected.style.display    = 'none';
   }
 }
 
@@ -2459,81 +2623,248 @@ async function connectYouTubeChannel() {
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Connecting…'; }
   try {
     if (!window.currentUser) throw new Error('Please log in first.');
-    // 1) Google sign-in popup, requesting YouTube read-only + analytics scopes
+
+    // Use GoogleAuthProvider with the correct client_id and YouTube scopes
     const provider = new window._fb.GoogleAuthProvider();
+    // Force the correct OAuth client
+    provider.setCustomParameters({
+      client_id: YT_OAUTH_CLIENT_ID,
+      prompt: 'consent',
+      access_type: 'offline'
+    });
+    provider.addScope('https://www.googleapis.com/auth/youtube');
+    provider.addScope('https://www.googleapis.com/auth/youtube.upload');
     provider.addScope('https://www.googleapis.com/auth/youtube.readonly');
     provider.addScope('https://www.googleapis.com/auth/yt-analytics.readonly');
-    showToast('Opening Google sign-in…', 'info');
-    const result = await window._fb.signInWithPopup(window._fb.auth, provider);
+
+    showToast('Opening Google sign-in — please allow YouTube access…', 'info');
+    const result     = await window._fb.signInWithPopup(window._fb.auth, provider);
     const credential = window._fb.GoogleAuthProvider.credentialFromResult(result);
     const accessToken = credential?.accessToken;
-    if (!accessToken) throw new Error('Google did not return YouTube permissions. Please allow access and try again.');
+    if (!accessToken) throw new Error('Google did not return YouTube permissions. Please allow all access and try again.');
 
-    // 2) Send the access token to our backend, which fetches channel + analytics
-    //    data server-side (using the rotating YouTube key pool) and saves to Firebase.
+    window._mcAccessToken = accessToken;
+    showToast('Connected to Google! Loading channel data…', 'info');
+
+    // Call backend to fetch full channel + analytics + videos
     const res = await fetch(`${API_BASE}?action=connect_youtube_channel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ uid: window.currentUser.uid, accessToken })
     });
+
     if (!res.ok) {
       const errText = await res.text().catch(()=>'');
-      throw new Error(`Backend error (${res.status}). ${errText.slice(0,150)}`);
+      // Backend unavailable — fetch directly from YouTube API
+      if (res.status === 404 || errText.includes('404') || errText.includes('Not Found')) {
+        await connectYouTubeChannelDirect(accessToken);
+        return;
+      }
+      throw new Error(`Backend error (${res.status}).`);
     }
     const data = await res.json();
     if (!data.success) throw new Error(data.message || 'Could not connect channel.');
 
     window._myChannel = data.channel;
     document.getElementById('mcNotConnected').style.display = 'none';
-    document.getElementById('mcConnected').style.display = 'block';
+    document.getElementById('mcConnected').style.display    = 'block';
+    const actions = document.getElementById('mcConnectedActions');
+    if (actions) actions.style.display = 'flex';
     renderMyChannelData(data.channel);
-    showToast('Channel connected!', 'success');
+    showToast('✓ Channel connected: ' + data.channel.title, 'success');
   } catch(e) {
     let msg = e.message || 'Unknown error';
-    if (msg.includes('Failed to fetch')) {
-      msg = 'Could not reach the backend (api.php). Make sure the site is served over http(s):// — not opened as a local file — and that api.php is uploaded to your server.';
+    if (msg.includes('popup-closed') || msg.includes('popup_closed')) {
+      msg = 'Sign-in popup was closed. Please try again and complete the Google sign-in.';
+    } else if (msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
+      // Backend not reachable — try direct fetch
+      try {
+        await connectYouTubeChannelDirect(window._mcAccessToken);
+        return;
+      } catch(e2) { msg = 'Backend not reachable (api.php missing) and direct fetch also failed: ' + e2.message; }
+    } else if (msg.includes('auth/unauthorized-domain')) {
+      msg = 'Domain not authorized in Firebase. Add this domain in Firebase Console → Authentication → Authorized Domains.';
+    } else if (msg.includes('auth/popup-blocked')) {
+      msg = 'Popup was blocked by your browser. Please allow popups for this site and try again.';
     }
     showToast('Connect failed: ' + msg, 'error');
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" style="margin-right:7px;vertical-align:-2px"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.4 3.6z"/></svg> Connect YouTube Channel'; }
+    if (btn) {
+      btn.disabled = false;
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="currentColor" width="15" height="15" style="margin-right:7px;vertical-align:-2px"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2 31 31 0 0 0 0 12a31 31 0 0 0 .5 5.8 3 3 0 0 0 2.1 2.1c1.9.6 9.4.6 9.4.6s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1A31 31 0 0 0 24 12a31 31 0 0 0-.5-5.8zM9.6 15.6V8.4l6.4 3.6z"/></svg> Connect YouTube Channel';
+    }
   }
+}
+
+// Direct channel fetch (fallback when api.php is not deployed)
+async function connectYouTubeChannelDirect(accessToken) {
+  if (!accessToken) throw new Error('No access token available. Please reconnect.');
+  const headers = { Authorization: 'Bearer ' + accessToken };
+
+  // Fetch channel info
+  const chRes  = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&mine=true', { headers });
+  const chData = await chRes.json();
+  if (!chData.items?.length) throw new Error('No YouTube channel found on this Google account.');
+
+  const ch  = chData.items[0];
+  const sn  = ch.snippet || {};
+  const st  = ch.statistics || {};
+  const td  = ch.topicDetails?.topicCategories || [];
+  let cat   = td.length ? td[0].split('/').pop().replace(/_/g,' ') : 'General';
+
+  // Fetch recent videos
+  const vidRes  = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&mine=true&type=video&maxResults=20&order=date`, { headers });
+  const vidData = await vidRes.json();
+  const ids = (vidData.items||[]).map(i=>i.id.videoId).filter(Boolean);
+  let videos = [];
+  if (ids.length) {
+    const vRes  = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${ids.join(',')}`, { headers });
+    const vData = await vRes.json();
+    videos = (vData.items||[]).map(v => {
+      const vs  = v.statistics || {};
+      const dur = v.contentDetails?.duration || '';
+      const dm  = dur.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/) || [];
+      const s   = (+dm[1]||0)*3600 + (+dm[2]||0)*60 + (+dm[3]||0);
+      return {
+        videoId: v.id, title: v.snippet.title,
+        thumbnail: v.snippet.thumbnails?.medium?.url || '',
+        publishedAt: v.snippet.publishedAt,
+        views: +vs.viewCount||0, likes: +vs.likeCount||0,
+        comments: +vs.commentCount||0, durationSecs: s, isShort: s>0&&s<=70,
+        subsGained: 0, watchTimeMinutes: 0
+      };
+    });
+  }
+
+  // Try Analytics API
+  let viewsToday=0, viewsYesterday=0, viewsThisMonth=0, watchTime=0, totalLikes=0;
+  try {
+    const today  = new Date().toISOString().split('T')[0];
+    const month  = new Date(Date.now()-30*864e5).toISOString().split('T')[0];
+    const anaRes = await fetch(
+      `https://youtubeanalytics.googleapis.com/v2/reports?ids=channel%3D%3D${ch.id}&startDate=${month}&endDate=${today}&metrics=views,estimatedMinutesWatched,likes&dimensions=day&sort=day`,
+      { headers }
+    );
+    const anaData = await anaRes.json();
+    if (anaData.rows) {
+      viewsThisMonth = anaData.rows.reduce((a,r)=>a+(+r[0]||0),0);
+      watchTime      = anaData.rows.reduce((a,r)=>a+(+r[1]||0),0);
+      totalLikes     = anaData.rows.reduce((a,r)=>a+(+r[2]||0),0);
+      const yest = new Date(Date.now()-864e5).toISOString().split('T')[0];
+      anaData.rows.forEach(r => {
+        if (r[3]===today) viewsToday = +r[0]||0;
+        if (r[3]===yest)  viewsYesterday = +r[0]||0;
+      });
+    }
+  } catch(e) {
+    totalLikes = videos.reduce((a,v)=>a+v.likes,0);
+  }
+
+  const channelObj = {
+    channelId: ch.id, title: sn.title||'', handle: (sn.customUrl||'').replace('@',''),
+    description: sn.description||'',
+    thumbnail: sn.thumbnails?.medium?.url || sn.thumbnails?.default?.url || '',
+    country: sn.country || ch.brandingSettings?.channel?.country || '',
+    publishedAt: sn.publishedAt||'', category: cat,
+    subscribers: +st.subscriberCount||0, totalViews: +st.viewCount||0,
+    videoCount: +st.videoCount||0, totalLikes,
+    viewsToday, viewsYesterday, viewsThisMonth, watchTimeMinutes: watchTime,
+    videos, lastSynced: new Date().toISOString(), accessToken
+  };
+
+  // Save to Firebase
+  const fb = window._fb;
+  await fb.set(fb.ref(fb.db, `users/${window.currentUser.uid}/myChannel`), channelObj);
+  window._myChannel = channelObj;
+
+  document.getElementById('mcNotConnected').style.display = 'none';
+  document.getElementById('mcConnected').style.display    = 'block';
+  const actions = document.getElementById('mcConnectedActions');
+  if (actions) actions.style.display = 'flex';
+  renderMyChannelData(channelObj);
+  showToast('✓ Channel connected: ' + channelObj.title, 'success');
 }
 
 async function disconnectYouTubeChannel() {
   if (!confirm('Disconnect your YouTube channel? You can reconnect anytime.')) return;
   try {
+    const fb = window._fb;
+    await fb.remove(fb.ref(fb.db, `users/${window.currentUser.uid}/myChannel`));
     await fetch(`${API_BASE}?action=disconnect_youtube_channel`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ uid: window.currentUser?.uid })
-    });
+    }).catch(()=>{});
   } catch(e) {}
   window._myChannel = null;
-  document.getElementById('mcConnected').style.display = 'none';
+  window._mcAccessToken = null;
+  document.getElementById('mcConnected').style.display    = 'none';
   document.getElementById('mcNotConnected').style.display = 'block';
+  const actions = document.getElementById('mcConnectedActions');
+  if (actions) actions.style.display = 'none';
   showToast('Channel disconnected.', 'info');
 }
 
 function renderMyChannelData(ch) {
   if (!ch) return;
-  const thumb = ch.thumbnail || '';
-  document.getElementById('mcAvatar').innerHTML = thumb ? `<img src="${thumb}" alt="${ch.title}" />` : (ch.title||'YT').charAt(0).toUpperCase();
-  document.getElementById('mcName').textContent   = ch.title || '—';
-  document.getElementById('mcHandle').textContent = ch.handle ? '@' + ch.handle : 'YouTube Channel';
-  document.getElementById('mcViewsToday').textContent     = fmtNum(ch.viewsToday || 0);
-  document.getElementById('mcViewsYesterday').textContent = fmtNum(ch.viewsYesterday || 0);
-  document.getElementById('mcViewsMonth').textContent     = fmtNum(ch.viewsThisMonth || 0);
-  document.getElementById('mcViewsTotal').textContent     = fmtNum(ch.totalViews || 0);
-  document.getElementById('mcSubs').textContent           = fmtNum(ch.subscribers || 0);
-  document.getElementById('mcLikes').textContent          = fmtNum(ch.totalLikes || 0);
-  document.getElementById('mcLastSync').textContent       = ch.lastSynced ? new Date(ch.lastSynced).toLocaleString('en-PK') : 'Just now';
+  // Avatar
+  const av = document.getElementById('mcAvatar');
+  if (av) av.innerHTML = ch.thumbnail ? `<img src="${ch.thumbnail}" alt="${ch.title}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">` : (ch.title||'YT').charAt(0).toUpperCase();
+  // Name + handle
+  const setT = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v||'—'; };
+  setT('mcName',    ch.title);
+  setT('mcHandle',  ch.handle ? '@'+ch.handle : 'YouTube Channel');
+  setT('mcSubs',    fmtNum(ch.subscribers  || 0));
+  setT('mcViewsTotal',    fmtNum(ch.totalViews   || 0));
+  setT('mcWatchTime', ch.watchTimeMinutes ? fmtNum(ch.watchTimeMinutes)+' min' : '—');
+  setT('mcLikes',   fmtNum(ch.totalLikes   || 0));
+  setT('mcViewsToday',    fmtNum(ch.viewsToday   || 0));
+  setT('mcViewsYesterday',fmtNum(ch.viewsYesterday || 0));
+  setT('mcViewsMonth',    fmtNum(ch.viewsThisMonth || 0));
+  setT('mcVideoCount',    fmtNum(ch.videoCount  || 0));
+  setT('mcCountry',  ch.country  || 'Global');
+  setT('mcCategory', ch.category || 'General');
+  setT('mcChannelId', ch.channelId || '—');
+  setT('mcCreated', ch.publishedAt ? new Date(ch.publishedAt).toLocaleDateString('en-PK',{year:'numeric',month:'long',day:'numeric'}) : '—');
+  setT('mcLastSync', ch.lastSynced ? new Date(ch.lastSynced).toLocaleString('en-PK') : 'Just now');
+
+  // Badges
+  const catB = document.getElementById('mcCategoryBadge');
+  if (catB && ch.category) { catB.textContent = ch.category; catB.style.display = 'inline-flex'; }
+  const ctryB = document.getElementById('mcCountryBadge');
+  if (ctryB && ch.country) { ctryB.textContent = '🌍 ' + ch.country; ctryB.style.display = 'inline-flex'; }
+  const liveB = document.getElementById('mcLiveBadge');
+  if (liveB) liveB.style.display = 'inline-flex';
+
+  renderMcVideos(ch.videos || []);
+  // Load upload history
+  renderMcUploadHistory();
+}
+
+function filterMcVideos(type, btn) {
+  _mcVideoFilter = type;
+  document.querySelectorAll('#panel-mychannel .pill-tab').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderMcVideos(window._myChannel?.videos || []);
+}
+
+function renderMcVideos(videos) {
   const list = document.getElementById('mcVideoList');
-  const videos = ch.videos || [];
-  if (!videos.length) { list.innerHTML = '<div style="text-align:center;padding:18px;color:var(--text-muted);font-size:13px">No videos found yet.</div>'; return; }
-  list.innerHTML = videos.map((v,i) => `
-    <div class="info-row" style="cursor:pointer" onclick="analyzeMyVideo(${i})">
-      <span class="info-row-key" style="max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</span>
-      <span class="info-row-val">${fmtNum(v.views||0)} views · ${fmtNum(v.likes||0)} likes</span>
+  if (!list) return;
+  let filtered = [...videos];
+  if (_mcVideoFilter === 'long')  filtered = filtered.filter(v=>!v.isShort);
+  if (_mcVideoFilter === 'short') filtered = filtered.filter(v=>v.isShort);
+  if (!filtered.length) {
+    list.innerHTML = '<div style="text-align:center;padding:18px;color:var(--text-muted);font-size:12.5px">No videos found.</div>';
+    return;
+  }
+  list.innerHTML = filtered.map((v,i) => `
+    <div class="info-row" style="cursor:pointer;padding:9px 0;border-bottom:1px solid rgba(255,255,255,0.04);align-items:center;gap:10px" onclick="analyzeMyVideo(${i})">
+      ${v.thumbnail ? `<img src="${v.thumbnail}" style="width:54px;height:30px;object-fit:cover;border-radius:4px;flex-shrink:0">` : '<div style="width:54px;height:30px;background:var(--bg-card);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--text-muted);font-size:10px">▶</div>'}
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12.5px;font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${v.title}</div>
+        <div style="font-size:11px;color:var(--text-muted)">${fmtNum(v.views||0)} views · ${fmtNum(v.likes||0)} likes ${v.isShort?'· <span style="color:var(--blue)">Short</span>':''}</div>
+      </div>
+      <span style="font-size:10px;color:var(--text-muted);flex-shrink:0">Analyze →</span>
     </div>`).join('');
 }
 
@@ -2541,35 +2872,284 @@ async function analyzeMyVideo(idx) {
   const video = (window._myChannel?.videos || [])[idx];
   if (!video) return;
   const publishedMs = new Date(video.publishedAt).getTime();
-  const hoursOld = (Date.now() - publishedMs) / 3600000;
-  document.getElementById('mcVideoAnalysis').style.display = 'block';
+  const hoursOld    = (Date.now() - publishedMs) / 3600000;
+  const panel = document.getElementById('mcVideoAnalysis');
+  if (panel) panel.style.display = 'block';
   document.getElementById('mcAnalysisTitle').textContent = video.title;
   document.getElementById('mcVaViews').textContent = fmtNum(video.views || 0);
   document.getElementById('mcVaSubs').textContent  = fmtNum(video.subsGained || 0);
-  document.getElementById('mcVaWatch').textContent = video.watchTimeMinutes ? `${fmtNum(video.watchTimeMinutes)} min` : '—';
+  document.getElementById('mcVaWatch').textContent = video.watchTimeMinutes ? fmtNum(video.watchTimeMinutes)+' min' : '—';
+  document.getElementById('mcVaAvgDur').textContent = '—';
+
+  // Try to get fresh analytics from backend
+  if (window._mcAccessToken && window._myChannel?.channelId) {
+    try {
+      const r = await fetch(`${API_BASE}?action=get_video_analytics`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({
+          accessToken: window._mcAccessToken,
+          videoId: video.videoId,
+          channelId: window._myChannel.channelId
+        })
+      });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.success) {
+          document.getElementById('mcVaViews').textContent  = fmtNum(d.views || 0);
+          document.getElementById('mcVaSubs').textContent   = fmtNum(d.subsGained || 0);
+          document.getElementById('mcVaWatch').textContent  = d.watchTimeMin ? fmtNum(d.watchTimeMin)+' min' : '—';
+          document.getElementById('mcVaAvgDur').textContent = d.avgViewDurSec ? Math.floor(d.avgViewDurSec/60)+'m '+d.avgViewDurSec%60+'s' : '—';
+        }
+      }
+    } catch(e) { /* analytics optional */ }
+  }
+
   if (hoursOld < 6) {
     document.getElementById('mcVaPredVal').textContent = '—';
     document.getElementById('mcVaPredFill').style.width = '0%';
     document.getElementById('mcVaPredNote').textContent = `Prediction unlocks after 6 hours (video is ${hoursOld.toFixed(1)}h old). Check back later.`;
     return;
   }
-  document.getElementById('mcVaPredNote').textContent = 'Analyzing with AI…';
+  document.getElementById('mcVaPredNote').textContent = '✦ AI is analyzing performance…';
   try {
-    // TODO(backend): rate-limited to 1 analysis per video per 6h, enforced server-side too
-    const prompt = `You are a YouTube performance analyst. A video titled "${video.title}" published ${hoursOld.toFixed(1)} hours ago has ${video.views||0} views and ${video.subsGained||0} subscribers gained so far on a channel with ${window._myChannel?.subscribers||0} subscribers.
+    const prompt = `You are a YouTube performance analyst. A video titled "${video.title}" published ${hoursOld.toFixed(1)} hours ago on a channel "${window._myChannel?.title||''}" with ${window._myChannel?.subscribers||0} subscribers has so far: ${video.views||0} views, ${video.likes||0} likes, ${video.subsGained||0} subs gained.
+
 Return ONLY valid JSON:
-{ "chance": 62, "label": "High potential", "note": "2-3 sentence reasoning about why this video will likely perform above/below channel average, based on early engagement velocity." }`;
-    const text = await callAI(prompt);
+{ "chance": 72, "label": "Strong performer", "note": "2-3 sentence analysis of why this video is likely to perform above/below average based on early engagement velocity, like-to-view ratio, and channel size context.", "suggestions": ["Actionable tip 1", "Actionable tip 2", "Actionable tip 3"] }`;
+    const text   = await callAI(prompt);
     const parsed = parseJSON(text);
-    const chance = parseInt(parsed.chance) || 50;
-    const color = chance >= 65 ? 'var(--green)' : chance >= 40 ? 'var(--gold)' : 'var(--red)';
-    document.getElementById('mcVaPredVal').textContent = chance + '% — ' + (parsed.label || '');
-    document.getElementById('mcVaPredVal').style.color = color;
-    document.getElementById('mcVaPredFill').style.width = chance + '%';
+    const chance = Math.min(100, Math.max(0, parseInt(parsed.chance)||50));
+    const color  = chance>=65?'var(--green)':chance>=40?'var(--gold)':'var(--red)';
+    document.getElementById('mcVaPredVal').textContent    = chance + '% — ' + (parsed.label||'');
+    document.getElementById('mcVaPredVal').style.color    = color;
+    document.getElementById('mcVaPredFill').style.width   = chance + '%';
     document.getElementById('mcVaPredFill').style.background = color;
-    document.getElementById('mcVaPredNote').textContent = parsed.note || '';
+    const tips = (parsed.suggestions||[]).map(s=>`<div style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.04)">💡 ${s}</div>`).join('');
+    document.getElementById('mcVaPredNote').innerHTML = `<p style="margin-bottom:8px">${parsed.note||''}</p>${tips}`;
   } catch(e) {
-    document.getElementById('mcVaPredNote').textContent = 'Prediction failed: ' + e.message;
+    document.getElementById('mcVaPredNote').textContent = 'AI prediction failed: ' + e.message;
+  }
+}
+
+/* ══ VIDEO UPLOAD ══════════════════════════════════════════════════════════ */
+function openUploadModal() {
+  if (!window._myChannel) { showToast('Please connect your channel first.', 'warning'); return; }
+  // Reset form
+  ['uploadTitle','uploadDescription','uploadTags','uploadHashtags'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('uploadPrivacy').value = 'private';
+  document.getElementById('uploadScheduleWrap').style.display = 'none';
+  document.getElementById('uploadAiPreview').style.display = 'none';
+  document.getElementById('uploadProgressWrap').style.display = 'none';
+  document.getElementById('uploadResult').textContent = '';
+  document.getElementById('uploadFileName').textContent = 'Click or drag video here';
+  _selectedUploadFile = null;
+  openModal('uploadModal');
+}
+
+function toggleScheduleField() {
+  const val = document.getElementById('uploadPrivacy').value;
+  document.getElementById('uploadScheduleWrap').style.display = val==='scheduled' ? 'block' : 'none';
+}
+
+function handleVideoSelect(e) {
+  const file = e.target.files?.[0];
+  if (file) {
+    _selectedUploadFile = file;
+    document.getElementById('uploadFileName').textContent = `✓ ${file.name} (${(file.size/1e6).toFixed(1)} MB)`;
+    document.getElementById('uploadDropZone').style.borderColor = 'var(--green)';
+    // Auto-fill title from filename
+    if (!document.getElementById('uploadTitle').value) {
+      const name = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g,' ');
+      document.getElementById('uploadTitle').value = name;
+    }
+  }
+}
+
+function handleVideoDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadDropZone').style.borderColor = 'var(--glass-border)';
+  const file = e.dataTransfer.files?.[0];
+  if (file && file.type.startsWith('video/')) {
+    _selectedUploadFile = file;
+    document.getElementById('uploadFileName').textContent = `✓ ${file.name} (${(file.size/1e6).toFixed(1)} MB)`;
+    document.getElementById('uploadDropZone').style.borderColor = 'var(--green)';
+    if (!document.getElementById('uploadTitle').value) {
+      document.getElementById('uploadTitle').value = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g,' ');
+    }
+  } else {
+    showToast('Please drop a valid video file.', 'warning');
+  }
+}
+
+async function aiGenerateUploadContent() {
+  const topic = document.getElementById('uploadTitle').value.trim() || 'YouTube video';
+  const isShort = _selectedUploadFile && (_selectedUploadFile.name.toLowerCase().includes('short') || _selectedUploadFile.size < 50e6);
+  const btn = document.querySelector('[onclick="aiGenerateUploadContent()"]');
+  if (btn) { btn.disabled=true; btn.textContent='✦ Generating…'; }
+  try {
+    const prompt = `You are an elite YouTube SEO expert. Generate SEO content for a ${isShort?'YouTube Shorts':'YouTube long-form'} video.
+Topic: "${topic}"
+Channel: "${window._myChannel?.title||''}" (${fmtNum(window._myChannel?.subscribers||0)} subscribers)
+
+Return ONLY valid JSON (no markdown):
+{
+  "title": "Optimized title under 70 chars",
+  "description": "Professional 200-word YouTube description with timestamps, CTA, hashtags. Sound natural.",
+  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"],
+  "hashtags": "#hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5"
+}`;
+    const text   = await callAI(prompt);
+    const parsed = parseJSON(text);
+    if (parsed.title)       document.getElementById('uploadTitle').value       = parsed.title;
+    if (parsed.description) document.getElementById('uploadDescription').value = parsed.description;
+    if (parsed.tags)        document.getElementById('uploadTags').value        = (parsed.tags||[]).join(', ');
+    if (parsed.hashtags)    document.getElementById('uploadHashtags').value    = parsed.hashtags;
+    document.getElementById('uploadAiPreview').style.display = 'block';
+    document.getElementById('uploadAiNote').textContent = '✓ SEO content generated — review and edit before publishing. AI-optimized for your channel size and niche.';
+    showToast('AI SEO content filled in — review before uploading!', 'success');
+  } catch(e) {
+    showToast('AI error: ' + e.message, 'error');
+  } finally {
+    if (btn) { btn.disabled=false; btn.textContent='✦ AI Generate SEO'; }
+  }
+}
+
+async function submitVideoUpload() {
+  const title    = document.getElementById('uploadTitle').value.trim();
+  const desc     = document.getElementById('uploadDescription').value.trim();
+  const tagsRaw  = document.getElementById('uploadTags').value.trim();
+  const hashRaw  = document.getElementById('uploadHashtags').value.trim();
+  const privacy  = document.getElementById('uploadPrivacy').value;
+  const schedAt  = document.getElementById('uploadScheduleAt')?.value;
+  const resEl    = document.getElementById('uploadResult');
+  const btn      = document.getElementById('uploadSubmitBtn');
+
+  if (!title) { resEl.style.color='var(--red)'; resEl.textContent='Video title is required.'; return; }
+  if (!_selectedUploadFile) { resEl.style.color='var(--red)'; resEl.textContent='Please select a video file.'; return; }
+  if (!window._mcAccessToken) { resEl.style.color='var(--red)'; resEl.textContent='Not connected to YouTube. Please reconnect your channel.'; return; }
+
+  const tags = tagsRaw ? tagsRaw.split(',').map(t=>t.trim()).filter(Boolean) : [];
+  const fullDesc = desc + (hashRaw ? '\n\n' + hashRaw : '');
+  const privacyVal = privacy === 'scheduled' ? 'private' : privacy;
+  const publishAt  = privacy === 'scheduled' && schedAt ? new Date(schedAt).toISOString() : null;
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Uploading…';
+  resEl.style.color = 'var(--text-muted)';
+  resEl.textContent = 'Requesting YouTube upload URL…';
+
+  try {
+    // Step 1: Get resumable upload URL from backend (or directly)
+    let uploadUrl = null;
+    let uploadKey = null;
+    try {
+      const metaRes = await fetch(`${API_BASE}?action=upload_video`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ uid: window.currentUser?.uid, accessToken: window._mcAccessToken, title, description: fullDesc, tags, privacyStatus: privacyVal, publishAt })
+      });
+      const metaData = await metaRes.json();
+      if (metaData.uploadUrl) { uploadUrl = metaData.uploadUrl; uploadKey = metaData.uploadKey; }
+    } catch(e) { /* fallback: get upload URL directly from YouTube */ }
+
+    if (!uploadUrl) {
+      // Direct YouTube resumable upload initiation
+      const resource = {
+        snippet: { title, description: fullDesc, tags, categoryId: '22' },
+        status: { privacyStatus: privacyVal, selfDeclaredMadeForKids: false, ...(publishAt ? { publishAt } : {}) }
+      };
+      const initRes = await fetch(
+        'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Bearer ' + window._mcAccessToken,
+            'Content-Type': 'application/json',
+            'X-Upload-Content-Type': _selectedUploadFile.type || 'video/*',
+            'X-Upload-Content-Length': _selectedUploadFile.size
+          },
+          body: JSON.stringify(resource)
+        }
+      );
+      uploadUrl = initRes.headers.get('Location');
+      if (!uploadUrl) throw new Error('YouTube did not return upload URL. Check that your account has YouTube upload permission and try reconnecting.');
+    }
+
+    // Step 2: Upload the file via XHR for progress tracking
+    resEl.textContent = 'Uploading video to YouTube…';
+    document.getElementById('uploadProgressWrap').style.display = 'block';
+
+    await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', uploadUrl);
+      xhr.setRequestHeader('Content-Type', _selectedUploadFile.type || 'video/*');
+      xhr.upload.onprogress = e => {
+        if (e.lengthComputable) {
+          const pct = Math.round(e.loaded / e.total * 100);
+          document.getElementById('uploadProgressBar').style.width = pct + '%';
+          document.getElementById('uploadProgressPct').textContent = pct + '%';
+          resEl.textContent = `Uploading… ${pct}%`;
+        }
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve(data);
+          } catch { resolve({ id: 'unknown' }); }
+        } else {
+          reject(new Error(`Upload failed (HTTP ${xhr.status}). ${xhr.responseText.slice(0,200)}`));
+        }
+      };
+      xhr.onerror = () => reject(new Error('Network error during upload.'));
+      xhr.send(_selectedUploadFile);
+    });
+
+    document.getElementById('uploadProgressBar').style.width = '100%';
+    document.getElementById('uploadProgressPct').textContent = '100%';
+    resEl.style.color = 'var(--green)';
+    const pubMsg = publishAt ? ` · Scheduled for ${new Date(publishAt).toLocaleString('en-PK')}` : '';
+    resEl.textContent = `✓ Video uploaded successfully!${pubMsg}`;
+
+    // Save upload record to Firebase
+    const fb = window._fb;
+    const record = { title, description: fullDesc, tags, privacyStatus: privacyVal, publishAt, uploadedAt: new Date().toISOString(), status: 'uploaded' };
+    const recRef = fb.push(fb.ref(fb.db, `users/${window.currentUser?.uid}/uploads`));
+    await fb.set(recRef, { ...record, id: recRef.key });
+
+    showToast('✓ Video uploaded to YouTube!', 'success');
+    setTimeout(() => closeModal('uploadModal'), 2200);
+
+    // Refresh upload history
+    renderMcUploadHistory();
+  } catch(e) {
+    resEl.style.color = 'var(--red)';
+    resEl.textContent = '✗ ' + e.message;
+    showToast('Upload error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> Upload to YouTube';
+  }
+}
+
+async function renderMcUploadHistory() {
+  const el = document.getElementById('mcUploadHistory');
+  if (!el || !window.currentUser) return;
+  try {
+    const fb   = window._fb;
+    const snap = await fb.get(fb.ref(fb.db, `users/${window.currentUser.uid}/uploads`));
+    if (!snap.exists()) { el.innerHTML = '<div style="text-align:center;padding:18px;color:var(--text-muted);font-size:12.5px">No uploads yet via this platform.</div>'; return; }
+    const items = Object.values(snap.val()).reverse().slice(0,10);
+    el.innerHTML = items.map(u => `
+      <div class="info-row" style="flex-direction:column;align-items:flex-start;padding:8px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+        <div style="font-size:12.5px;font-weight:500;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%">${u.title||'Untitled'}</div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:2px">
+          ${u.uploadedAt ? new Date(u.uploadedAt).toLocaleDateString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : ''}
+          · <span style="color:${u.privacyStatus==='public'?'var(--green)':u.privacyStatus==='private'?'var(--red)':'var(--gold)'}">${u.privacyStatus||'—'}</span>
+          ${u.publishAt ? ' · Scheduled: '+new Date(u.publishAt).toLocaleDateString('en-PK') : ''}
+        </div>
+      </div>`).join('');
+  } catch(e) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);padding:8px">Could not load upload history.</div>';
   }
 }
 
