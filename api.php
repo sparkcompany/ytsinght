@@ -21,9 +21,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
 /* ═══════════════════════════════════════════════════════════════════════════
    CONFIG  — edit these values
    ═════════════════════════════════════════════════════════════════════════ */
-define('FIREBASE_PROJECT_ID', 'spaintoearn');
-define('FIREBASE_DB_URL',     'https://spaintoearn-default-rtdb.firebaseio.com');
-define('FIREBASE_WEB_API_KEY','AIzaSyCdrPLotWyFJXsRcBJrga91LbiAXGicbpY');   // same as in HTML
+define('FIREBASE_PROJECT_ID', 'insight');
+define('FIREBASE_DB_URL',     'https://insight-4264d.firebaseio.com');
+define('FIREBASE_WEB_API_KEY','AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I');   // same as in HTML
 define('GOOGLE_CLIENT_ID',    '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com');
 define('GOOGLE_CLIENT_SECRET','');   // <-- paste your client secret here (from Google Cloud Console)
 
