@@ -12,20 +12,17 @@
   import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile, updatePassword, updateEmail, GoogleAuthProvider, signInWithPopup } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js';
   import { getDatabase, ref, set, get, push, onValue, update, remove } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js';
- 
 
-    const firebaseConfig = {
-    apiKey: "AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I",
-    authDomain: "insight-4264d.firebaseapp.com",
-    projectId: "insight-4264d",
-    storageBucket: "insight-4264d.firebasestorage.app",
-    messagingSenderId: "349243473589",
-    appId: "1:349243473589:web:d7169e82d1129aa23cc8fc"
+  const firebaseConfig = {
+    apiKey: "AIzaSyCdrPLotWyFJXsRcBJrga91LbiAXGicbpY",
+    authDomain: "spaintoearn.firebaseapp.com",
+    databaseURL: "https://spaintoearn-default-rtdb.firebaseio.com",
+    projectId: "spaintoearn",
+    storageBucket: "spaintoearn.firebasestorage.app",
+    messagingSenderId: "77653986140",
+    appId: "1:77653986140:web:4a3b0f1895ddad1664cf99",
+    measurementId: "G-BJE7GM34DJ"
   };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-</script>
   // OAuth2 Client ID for YouTube scope requests
   window.GOOGLE_CLIENT_ID = '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com';
 
