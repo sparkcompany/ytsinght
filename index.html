@@ -1786,24 +1786,27 @@ textarea.cf-input { height: 100px; padding: 12px 14px; resize: none; }
               <div style="display:flex;align-items:center;gap:10px;background:rgba(167,139,250,0.06);border:1px solid rgba(167,139,250,0.18);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px">
                 <div style="width:32px;height:32px;border-radius:8px;background:var(--purple-dim);display:flex;align-items:center;justify-content:center;flex-shrink:0">✦</div>
                 <div>
-                  <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text-primary)">Gemini Flash 1.5 (via OpenRouter)</div>
-                  <div style="font-size:11.5px;color:var(--text-muted)">Built-in · No API key required · Always on</div>
+                  <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--text-primary)">Gemini Flash 1.5 (via Server)</div>
+                  <div style="font-size:11.5px;color:var(--text-muted)">Server-side · Keys in api.php · Always on</div>
                 </div>
                 <span class="card-badge" style="margin-left:auto;background:var(--green-dim);color:var(--green);border:1px solid rgba(47,217,138,.25)">✓ Active</span>
               </div>
-              <div style="font-size:12px;color:var(--text-muted);line-height:1.5">AI features (SEO, thumbnails, keyword analysis, video predictions) all use Gemini Flash via OpenRouter — built into YTInsight. No extra API keys needed.</div>
+              <div style="font-size:12px;color:var(--text-muted);line-height:1.5">AI features (SEO generation, keyword analysis, thumbnail prompts) use Gemini Flash via the server — API keys are configured in <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px">api.php</code>. No client-side keys needed.</div>
             </div>
 
             <!-- YouTube API Key -->
             <div class="dash-card" style="margin-bottom:14px">
-              <div class="settings-section-title">YouTube Data API Key</div>
-              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">Required for analyzing public YouTube channels. Get a free key from <a href="https://console.cloud.google.com" target="_blank" style="color:var(--blue)">Google Cloud Console</a> → YouTube Data API v3.</div>
+              <div class="settings-section-title">YouTube API Key</div>
+              <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;line-height:1.5">
+                The YouTube Data API key is configured on the server in <code style="background:rgba(255,255,255,0.06);padding:1px 5px;border-radius:4px">api.php</code> (YT_SERVER_KEY). Channel analysis, keyword ranking, and SEO generation all use the server key automatically.<br><br>
+                You can optionally paste a personal YouTube key below as a fallback when the server is not deployed:
+              </div>
               <div class="api-key-display">
-                <span class="key-text" id="ytKeyDisplay">Not set</span>
+                <span class="key-text" id="ytKeyDisplay">Not set (using server key)</span>
                 <button class="copy-btn" style="position:static;font-size:10px" onclick="toggleKeyVis('ytKeyDisplay','ytKeyInput','yt')">👁</button>
               </div>
               <div style="display:flex;gap:8px;margin-top:8px">
-                <input class="api-input" id="ytKeyInput" type="password" placeholder="AIza… paste your YouTube Data API key" style="flex:1" />
+                <input class="api-input" id="ytKeyInput" type="password" placeholder="AIza… optional fallback YouTube key" style="flex:1" />
                 <button class="btn-save-keys" onclick="saveApiKey('youtube','ytKeyInput','ytKeyDisplay')">Save</button>
               </div>
             </div>
@@ -1854,14 +1857,9 @@ textarea.cf-input { height: 100px; padding: 12px 14px; resize: none; }
 
 <script>
 /* ══ CONFIG ═══════════════════════════════════════════════════════════════ */
+// All API keys (YouTube, Gemini, OpenRouter) are stored securely in api.php
+// Nothing sensitive lives in this file.
 const API_BASE = 'api.php';
-
-// ── OpenRouter API (single AI provider) ──────────────────────────────────
-const OPENROUTER_API_KEY = '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';
-const OPENROUTER_MODEL   = 'google/gemini-flash-1.5';  // Gemini Flash via OpenRouter
-const OPENROUTER_URL     = 'https://openrouter.ai/api/v1/chat/completions';
-const SITE_URL           = window.location.origin || 'https://ytinsight.app';
-const SITE_NAME          = 'YTInsight';
 
 /* ══ STATE ════════════════════════════════════════════════════════════════ */
 window.userPlan      = 'free';
@@ -1872,8 +1870,8 @@ let allVideos        = [];
 let channelData      = null;
 let historyFilter    = 'all';
 let selectedVideo    = null;
-let aiProvider       = 'openrouter';  // single provider now
-window._apiKeys      = { youtube:'', geminiModel:'google/gemini-flash-1.5' };
+let aiProvider       = 'backend';  // all AI goes through api.php
+window._apiKeys      = { youtube:'' };
 let _keyVisible      = {};
 
 /* ══ THEME ════════════════════════════════════════════════════════════════ */
@@ -2093,17 +2091,9 @@ function saveApiKey(type, inputId, displayId) {
   window._apiKeys[type] = val;
   // Clear input and show saved placeholder
   if (inputEl) { inputEl.value = ''; inputEl.placeholder = '●●●● saved ✓ (paste new to update)'; }
-  // Reset Gemini model detection cache when key changes
-  if (type === 'gemini') {
-    _detectedGeminiModel    = null;
-    _detectedGeminiEndpoint = null;
-    const el = document.getElementById('geminiModelDisplay');
-    if (el) el.textContent = 'Will auto-detect on first use';
-  }
   window.saveApiKeysToRTDB();
   updateApiKeyDisplay();
-  if (type === 'gemini' || type === 'chatgpt') updateAiProviderUI();
-  showToast(`✓ ${type.charAt(0).toUpperCase()+type.slice(1)} API key saved successfully!`, 'success');
+  showToast(`✓ ${type.charAt(0).toUpperCase()+type.slice(1)} API key saved as fallback!`, 'success');
 }
 
 function updateApiKeyDisplay() {
@@ -2145,32 +2135,22 @@ function setAiProvider(provider, btn) {
   if (badge) badge.textContent = '✦ Gemini Flash';
 }
 
-/* ══ AI API CALL — OpenRouter (Gemini Flash) ══════════════════════════════ */
+/* ══ AI API CALL — Routes through api.php (keys stored server-side) ════════ */
+// NOTE: callAI is used only for thumbnail generation (still OpenRouter via backend)
+// SEO generation and keyword analysis have their own dedicated backend actions.
 async function callAI(prompt) {
-  const res = await fetch(OPENROUTER_URL, {
+  const res = await fetch(API_BASE, {
     method: 'POST',
-    headers: {
-      'Authorization': 'Bearer ' + OPENROUTER_API_KEY,
-      'HTTP-Referer': SITE_URL,
-      'X-Title': SITE_NAME,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: OPENROUTER_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      max_tokens: 1500,
-      temperature: 0.8
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'ai_prompt', prompt })
   });
   if (!res.ok) {
     const errText = await res.text().catch(()=>'');
-    throw new Error('OpenRouter error (' + res.status + '): ' + errText.slice(0,200));
+    throw new Error('Backend AI error (' + res.status + '): ' + errText.slice(0,200));
   }
   const data = await res.json();
-  if (data.error) throw new Error('AI error: ' + (data.error.message || JSON.stringify(data.error)));
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) throw new Error('Empty AI response. Please try again.');
-  return content;
+  if (!data.success) throw new Error(data.message || 'AI call failed.');
+  return data.text || '';
 }
 
 
@@ -2219,58 +2199,183 @@ function fmtNum(n) {
 async function analyzeChannel() {
   const url = document.getElementById('mainUrlInput').value.trim();
   if (!url) { showToast('Enter a YouTube channel or video URL.', 'warning'); return; }
-  const ytKey = window._apiKeys.youtube;
-  if (!ytKey) { showToast('YouTube API not configured yet. Backend key system coming soon.', 'warning'); return; }
   const btn = document.getElementById('analyzeBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>';
   showToast('Fetching channel data…', 'info');
   try {
-    const videoMatch = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_\-]{11})/);
-    let channelId = null;
-    if (videoMatch) {
-      const vRes  = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoMatch[1]}&key=${ytKey}`);
-      const vData = await vRes.json();
-      if (vData.items?.length) { channelId = vData.items[0].snippet.channelId; prefillSeoFromVideo(vData.items[0]); }
-    } else {
-      const handle    = url.replace(/https?:\/\/(www\.)?youtube\.com\//,'').replace('@','').split('/')[0].split('?')[0];
-      const handleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=@${handle}&key=${ytKey}`);
-      const handleData= await handleRes.json();
-      if (handleData.items?.length) { channelId = handleData.items[0].id; }
-      else {
-        const sr = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(handle)}&type=channel&maxResults=1&key=${ytKey}`);
-        const sd = await sr.json();
-        if (sd.items?.length) channelId = sd.items[0].snippet.channelId;
+    // Use backend YouTube API key — no client-side key needed
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'analyze_channel', url })
+    });
+
+    let chData = null;
+    if (res.ok) {
+      const d = await res.json();
+      if (d.success) chData = d;
+    }
+
+    // Fallback: if backend not deployed or fails, try with user-entered YouTube key
+    if (!chData) {
+      const ytKey = window._apiKeys.youtube;
+      if (!ytKey) {
+        showToast('No YouTube API key configured. Add key in Settings, or deploy api.php with YT_SERVER_KEY set.', 'error');
+        return;
       }
+      await analyzeChannelDirect(url, ytKey);
+      return;
     }
-    if (!channelId) throw new Error('Channel not found. Check the URL or handle.');
-    const chRes  = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${channelId}&key=${ytKey}`);
-    const chData = await chRes.json();
-    if (!chData.items?.length) throw new Error('Could not fetch channel data.');
-    const ch = chData.items[0]; channelData = ch;
-    const vidRes  = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=16&order=date&type=video&key=${ytKey}`);
-    const vidData = await vidRes.json();
-    const videoIds = vidData.items?.map(i => i.id.videoId).join(',');
-    let videos = [];
-    if (videoIds) {
-      const vs = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${ytKey}`);
-      videos = (await vs.json()).items || [];
-    }
-    allVideos = videos;
-    renderChannelData(ch);
-    renderVideos(videos);
-    updateStats(ch, videos);
-    saveToHistory({ type:'analysis', title: ch.snippet.title, meta:`${fmtNum(ch.statistics.subscriberCount)} subs · ${fmtNum(ch.statistics.viewCount)} views`, data:{ channelId, channelName:ch.snippet.title } });
+
+    // Backend returned channel data
+    const ch     = chData.channel;
+    const videos = chData.videos || [];
+    allVideos    = videos;
+    channelData  = ch._raw || ch;
+    renderChannelDataFromObj(ch);
+    renderVideosFromObj(videos);
+    updateStatsFromObj(ch, videos);
+    saveToHistory({ type:'analysis', title: ch.title, meta:`${fmtNum(ch.subscribers)} subs · ${fmtNum(ch.totalViews)} views`, data:{ channelId: ch.channelId, channelName: ch.title } });
     document.getElementById('liveBadge').style.display = 'flex';
     document.getElementById('chApiStatus').textContent = '✓ Connected';
     document.getElementById('chApiStatus').style.color = 'var(--green)';
-    showToast('Loaded: ' + ch.snippet.title, 'success');
+    showToast('Loaded: ' + ch.title, 'success');
   } catch(e) {
+    // Final fallback: direct YouTube API with user key
+    const ytKey = window._apiKeys.youtube;
+    if (ytKey) {
+      try { await analyzeChannelDirect(url, ytKey); return; } catch(e2) {}
+    }
     showToast('Error: ' + e.message, 'error');
     document.getElementById('chApiStatus').textContent = '✗ Failed';
     document.getElementById('chApiStatus').style.color = 'var(--red)';
   } finally {
     btn.disabled = false; btn.textContent = 'Analyze Now';
   }
+}
+
+// Direct YouTube API analyze (fallback when api.php not deployed)
+async function analyzeChannelDirect(url, ytKey) {
+  const videoMatch = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_\-]{11})/);
+  let channelId = null;
+  if (videoMatch) {
+    const vRes  = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${videoMatch[1]}&key=${ytKey}`);
+    const vData = await vRes.json();
+    if (vData.items?.length) { channelId = vData.items[0].snippet.channelId; prefillSeoFromVideo(vData.items[0]); }
+  } else {
+    const handle    = url.replace(/https?:\/\/(www\.)?youtube\.com\//,'').replace('@','').split('/')[0].split('?')[0];
+    const handleRes = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=id&forHandle=@${handle}&key=${ytKey}`);
+    const handleData= await handleRes.json();
+    if (handleData.items?.length) { channelId = handleData.items[0].id; }
+    else {
+      const sr = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(handle)}&type=channel&maxResults=1&key=${ytKey}`);
+      const sd = await sr.json();
+      if (sd.items?.length) channelId = sd.items[0].snippet.channelId;
+    }
+  }
+  if (!channelId) throw new Error('Channel not found. Check the URL or handle.');
+  const chRes  = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&id=${channelId}&key=${ytKey}`);
+  const chData = await chRes.json();
+  if (!chData.items?.length) throw new Error('Could not fetch channel data.');
+  const ch = chData.items[0]; channelData = ch;
+  const vidRes  = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&maxResults=16&order=date&type=video&key=${ytKey}`);
+  const vidData = await vidRes.json();
+  const videoIds = vidData.items?.map(i => i.id.videoId).join(',');
+  let videos = [];
+  if (videoIds) {
+    const vs = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails&id=${videoIds}&key=${ytKey}`);
+    videos = (await vs.json()).items || [];
+  }
+  allVideos = videos;
+  renderChannelData(ch);
+  renderVideos(videos);
+  updateStats(ch, videos);
+  saveToHistory({ type:'analysis', title: ch.snippet.title, meta:`${fmtNum(ch.statistics.subscriberCount)} subs · ${fmtNum(ch.statistics.viewCount)} views`, data:{ channelId, channelName:ch.snippet.title } });
+  document.getElementById('liveBadge').style.display = 'flex';
+  document.getElementById('chApiStatus').textContent = '✓ Connected';
+  document.getElementById('chApiStatus').style.color = 'var(--green)';
+  document.getElementById('analyzeBtn').disabled = false;
+  document.getElementById('analyzeBtn').textContent = 'Analyze Now';
+  showToast('Loaded: ' + ch.snippet.title, 'success');
+}
+
+// Render helpers for backend-format channel objects
+function renderChannelDataFromObj(ch) {
+  const avatar = document.getElementById('chAvatar');
+  if (ch.thumbnail) { avatar.innerHTML = `<img src="${ch.thumbnail}" alt="${ch.title}" />`; }
+  else { avatar.textContent = (ch.title||'YT').charAt(0).toUpperCase(); }
+  document.getElementById('chName').textContent    = ch.title || '—';
+  document.getElementById('chHandle').textContent  = ch.handle ? '@' + ch.handle : 'YouTube Channel';
+  document.getElementById('chSubs').textContent    = fmtNum(ch.subscribers);
+  document.getElementById('chViews').textContent   = fmtNum(ch.totalViews);
+  document.getElementById('chVids').textContent    = fmtNum(ch.videoCount);
+  const avg = ch.videoCount > 0 ? Math.round(ch.totalViews / ch.videoCount) : 0;
+  document.getElementById('chAvg').textContent     = fmtNum(avg);
+  document.getElementById('chCountry').textContent = ch.country || 'Global';
+  document.getElementById('chCreated').textContent = ch.publishedAt ? new Date(ch.publishedAt).toLocaleDateString('en-PK',{year:'numeric',month:'short'}) : '—';
+  document.getElementById('chCat').textContent     = ch.category || 'General';
+}
+
+function renderVideosFromObj(videos) {
+  const grid = document.getElementById('videoGrid');
+  if (!videos?.length) { grid.innerHTML = '<div style="text-align:center;padding:28px;color:var(--text-muted);grid-column:1/-1;font-size:13px">No videos found.</div>'; return; }
+  grid.innerHTML = videos.slice(0,12).map((v,i) => {
+    const thumb   = v.thumbnail || v.snippet?.thumbnails?.medium?.url || '';
+    const title   = v.title     || v.snippet?.title || '';
+    const views   = fmtNum(v.views || parseInt(v.statistics?.viewCount || 0));
+    const isShort = v.isShort   || false;
+    const score   = Math.round(68 + Math.random() * 28);
+    return `<div class="video-thumb" onclick="selectVideoObj(this,${i})" data-idx="${i}">
+      <div class="thumb-img-wrap">
+        ${thumb ? `<img src="${thumb}" alt="${title.replace(/"/g,'&quot;')}" loading="lazy"/>` : '<div class="thumb-placeholder">▶</div>'}
+        <div class="thumb-overlay"><svg viewBox="0 0 24 24" fill="white" width="24" height="24"><polygon points="5 3 19 12 5 21 5 3"/></svg></div>
+        ${isShort ? '<span class="video-type-badge short-badge" style="position:absolute;top:5px;left:5px">Short</span>' : ''}
+      </div>
+      <div class="video-info">
+        <div class="video-title">${title}</div>
+        <div class="video-meta">
+          <span class="video-views">${views}</span>
+          <span class="video-score">${score}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectVideoObj(el, idx) {
+  document.querySelectorAll('.video-thumb').forEach(v => v.classList.remove('selected'));
+  el.classList.add('selected');
+  const v = allVideos[idx];
+  if (!v) return;
+  // Handle both backend-format and YouTube API format
+  const isShort = v.isShort || false;
+  if (isShort) { setRatio('9:16', document.getElementById('ratio916Btn')); }
+  else         { setRatio('16:9', document.getElementById('ratio169Btn')); }
+  document.getElementById('seoTopic').value = v.title || v.snippet?.title || '';
+  document.getElementById('seoDesc').value  = (v.description || v.snippet?.description || '').slice(0,200);
+  selectedVideo = v;
+  document.getElementById('selectedVideoTitle').textContent = v.title || v.snippet?.title || 'Selected';
+  document.getElementById('selectedVideoType').textContent  = isShort ? '9:16 Short' : '16:9 Long-form';
+  document.getElementById('selectedVideoBar').style.display = 'flex';
+}
+
+function updateStatsFromObj(ch, videos) {
+  document.getElementById('statSubs').textContent   = fmtNum(ch.subscribers);
+  document.getElementById('statViews').textContent  = fmtNum(ch.totalViews);
+  document.getElementById('statVideos').textContent = fmtNum(ch.videoCount);
+  const ageMonths = ch.publishedAt
+    ? Math.max(1, Math.floor((Date.now() - new Date(ch.publishedAt)) / 2592000000))
+    : 1;
+  const monthlyViews = Math.round(ch.totalViews / ageMonths);
+  const earnMin = Math.round((monthlyViews/1000)*1.5);
+  const earnMax = Math.round((monthlyViews/1000)*4);
+  document.getElementById('statRevenue').textContent = `$${fmtNum(earnMin)}–$${fmtNum(earnMax)}`;
+  document.getElementById('chEarn').textContent      = `$${fmtNum(earnMin)}–$${fmtNum(earnMax)}/mo`;
+  document.getElementById('statSubsTrend').textContent = '✓ Live data';
+  document.getElementById('statSubsTrend').className   = 'stat-trend trend-up';
+  document.getElementById('statViewsTrend').textContent= '↑ Live data';
+  document.getElementById('statViewsTrend').className   = 'stat-trend trend-up';
+  document.getElementById('videoCardSub').textContent = `${fmtNum(ch.videoCount)} total videos · live`;
 }
 
 function prefillSeoFromVideo(video) {
@@ -2389,32 +2494,38 @@ async function generateSEO() {
   const btn = document.getElementById('seoGenBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Generating…';
   try {
-    const isShort = currentRatio === '9:16';
-    const prompt  = `You are an elite YouTube SEO expert. Generate a complete, professional, 100% human-like SEO package for a ${isShort ? 'YouTube Shorts (9:16 vertical)' : 'YouTube long-form video (16:9 horizontal)'}.
+    // Build channel context string
+    const channelCtx = channelData
+      ? `${channelData.snippet?.title || ''} (${fmtNum(channelData.statistics?.subscriberCount || 0)} subscribers)`
+      : '';
+    const videoId = selectedVideo?.id || '';
 
-Topic: "${topic}"
-${desc ? `Context: "${desc}"` : ''}
-${selectedVideo ? `Channel context: ${channelData?.snippet?.title || ''} (${fmtNum(channelData?.statistics?.subscriberCount || 0)} subscribers)` : ''}
-
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "title": "Compelling SEO-optimized YouTube title under 70 chars — include power words, main keyword near start",
-  "description": "Professional 200-250 word YouTube description. Start with the main keyword in first sentence. Include: what viewers will learn, timestamps section (0:00 Intro, key sections), call to subscribe, social links placeholder, relevant hashtags at end. Make it sound natural and human, not AI-generated.",
-  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12","tag13","tag14","tag15"],
-  "script": "Professional ${isShort ? '30-60 second Shorts' : '5-10 minute video'} script outline with hook, main content sections, and call to action. Format as: HOOK:\\n[hook text]\\n\\nMAIN CONTENT:\\n[sections]\\n\\nCTA:\\n[call to action]"
-}`;
-    const text   = await callAI(prompt);
-    const parsed = parseJSON(text);
+    // Call backend — YouTube API fetches metadata, Gemini generates SEO
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'generate_seo',
+        topic,
+        description: desc,
+        videoId,
+        channelContext: channelCtx,
+        ratio: currentRatio
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'SEO generation failed.');
+    const parsed = data.seo;
     document.getElementById('seoTitleOut').textContent = parsed.title || '';
     document.getElementById('seoDescOut').textContent  = parsed.description || '';
-    document.getElementById('seoTagsOut').innerHTML    = (parsed.tags||[]).map(t => `<span class="seo-tag" onclick="navigator.clipboard.writeText('${t}')">${t}</span>`).join('');
+    document.getElementById('seoTagsOut').innerHTML    = (parsed.tags||[]).map(t => `<span class="seo-tag" onclick="navigator.clipboard.writeText('${t.replace(/'/g,"\\'")}'">${t}</span>`).join('');
     document.getElementById('seoScriptOut').textContent= parsed.script || '';
     document.getElementById('seoResult').classList.add('visible');
     await window.incrementSeoRequest();
     saveToHistory({ type:'seo', title: parsed.title, meta:`${(parsed.tags||[]).length} tags · ${currentRatio}`, data:{ topic, title:parsed.title, description:parsed.description, tags:parsed.tags, script:parsed.script, ratio:currentRatio } });
     showToast('SEO package generated!', 'success');
   } catch(e) {
-    showToast('AI error: ' + e.message, 'error');
+    showToast('SEO error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg> Generate SEO';
@@ -2428,17 +2539,28 @@ async function generateThumbnail() {
   if (!topic) { showToast('Enter a video topic first.', 'warning'); return; }
   const btn = document.getElementById('thumbGenBtn');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Creating…';
-  const isShort  = currentRatio === '9:16';
+  const isShort   = currentRatio === '9:16';
   const ratioLabel = isShort ? '9:16 vertical (YouTube Shorts)' : '16:9 horizontal (Long-form)';
   try {
+    const viewCount = selectedVideo?.views || selectedVideo?.statistics?.viewCount || 0;
     const prompt = `You are a top YouTube thumbnail designer. Write ONE detailed AI image-generation prompt (for Midjourney/DALL-E/Stable Diffusion) for a scroll-stopping, high-CTR YouTube thumbnail about "${topic}".
 Aspect ratio: ${ratioLabel}
-${selectedVideo ? `Video has ${fmtNum(selectedVideo.statistics?.viewCount||0)} views on this channel.` : ''}
+${viewCount ? `Video has ${fmtNum(viewCount)} views on this channel.` : ''}
 
 The prompt must describe: exact scene/subject, facial expression if a person is present, background, bold text overlay (3-6 words, in quotes within the prompt), color contrast/hex accents, lighting, and composition — specific enough to paste directly into an AI image generator and get a usable thumbnail. Return ONLY valid JSON:
 { "imageprompt": "the full, ready-to-paste AI image generation prompt as one detailed paragraph" }`;
-    const text   = await callAI(prompt);
-    const parsed = parseJSON(text);
+
+    // Send to backend (OpenRouter via api.php — no key in HTML)
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'ai_prompt', prompt })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Thumbnail generation failed.');
+    const parsed = data.result || {};
+    if (!parsed.imageprompt) throw new Error('No image prompt returned. Try again.');
+
     lastThumbPrompt = parsed.imageprompt;
     document.getElementById('thumbResultLabel').textContent = `Thumbnail AI Prompt (${currentRatio})`;
     document.getElementById('thumbConceptOut').innerHTML = `
@@ -2449,7 +2571,7 @@ The prompt must describe: exact scene/subject, facial expression if a person is 
     saveToHistory({ type:'thumbnail', title:`Thumbnail Prompt: ${topic}`, meta:`${ratioLabel}`, data:{ topic, ratio:currentRatio, imageprompt:parsed.imageprompt } });
     showToast('Thumbnail prompt ready!', 'success');
   } catch(e) {
-    showToast('AI error: ' + e.message, 'error');
+    showToast('Thumbnail error: ' + e.message, 'error');
   } finally {
     btn.disabled = false;
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg> Gen Thumbnail';
@@ -2873,23 +2995,27 @@ async function aiGenerateUploadContent() {
   const btn = document.querySelector('[onclick="aiGenerateUploadContent()"]');
   if (btn) { btn.disabled=true; btn.textContent='✦ Generating…'; }
   try {
-    const prompt = `You are an elite YouTube SEO expert. Generate SEO content for a ${isShort?'YouTube Shorts':'YouTube long-form'} video.
-Topic: "${topic}"
-Channel: "${window._myChannel?.title||''}" (${fmtNum(window._myChannel?.subscribers||0)} subscribers)
-
-Return ONLY valid JSON (no markdown):
-{
-  "title": "Optimized title under 70 chars",
-  "description": "Professional 200-word YouTube description with timestamps, CTA, hashtags. Sound natural.",
-  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12"],
-  "hashtags": "#hashtag1 #hashtag2 #hashtag3 #hashtag4 #hashtag5"
-}`;
-    const text   = await callAI(prompt);
-    const parsed = parseJSON(text);
+    // Use backend Gemini API for AI SEO generation
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'generate_seo',
+        topic,
+        description: '',
+        channelContext: `${window._myChannel?.title||''} (${fmtNum(window._myChannel?.subscribers||0)} subscribers)`,
+        ratio: isShort ? '9:16' : '16:9'
+      })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'SEO generation failed');
+    const parsed = data.seo;
     if (parsed.title)       document.getElementById('uploadTitle').value       = parsed.title;
     if (parsed.description) document.getElementById('uploadDescription').value = parsed.description;
     if (parsed.tags)        document.getElementById('uploadTags').value        = (parsed.tags||[]).join(', ');
-    if (parsed.hashtags)    document.getElementById('uploadHashtags').value    = parsed.hashtags;
+    // Extract hashtags from description or generate from tags
+    const hashTags = (parsed.tags||[]).slice(0,5).map(t=>'#'+t.replace(/\s+/g,'')).join(' ');
+    if (hashTags) document.getElementById('uploadHashtags').value = hashTags;
     document.getElementById('uploadAiPreview').style.display = 'block';
     document.getElementById('uploadAiNote').textContent = '✓ SEO content generated — review and edit before publishing. AI-optimized for your channel size and niche.';
     showToast('AI SEO content filled in — review before uploading!', 'success');
@@ -3046,63 +3172,38 @@ async function analyzeKeyword() {
   const btn = document.getElementById('kwBtn');
   btn.disabled = true; btn.textContent = 'Analyzing…';
   try {
-    // Step 1: Pull real YouTube ranking/competition data for this keyword
-    let topVideos = [];
-    let rankingSummary = 'YouTube ranking data unavailable.';
-    const ytKey = window._apiKeys?.youtube;
-    if (ytKey) {
-      try {
-        const sRes  = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(kw)}&type=video&maxResults=10&order=relevance&key=${ytKey}`);
-        const sData = await sRes.json();
-        const ids = (sData.items || []).map(i => i.id.videoId).filter(Boolean).join(',');
-        if (ids) {
-          const vRes  = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics&id=${ids}&key=${ytKey}`);
-          const vData = await vRes.json();
-          topVideos = (vData.items || []).map(v => ({
-            title: v.snippet.title,
-            channel: v.snippet.channelTitle,
-            views: parseInt(v.statistics?.viewCount || 0),
-            publishedAt: v.snippet.publishedAt
-          }));
-        }
-        const avgViews = topVideos.length ? Math.round(topVideos.reduce((a,v)=>a+v.views,0)/topVideos.length) : 0;
-        rankingSummary = `Top ${topVideos.length} ranking videos found. Avg views among top results: ${fmtNum(avgViews)}.`;
-      } catch(e) { rankingSummary = 'Could not fetch live YouTube ranking (key issue or quota).'; }
-    }
+    // All logic runs in api.php:
+    // 1. YouTube API fetches real top-ranking videos (server-side key)
+    // 2. OpenRouter/Gemini Flash scores + generates AI insight
+    const res = await fetch(API_BASE, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'analyze_keyword', keyword: kw })
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Keyword analysis failed.');
 
-    // Step 2: Render the real ranking/competition list
+    const topVideos      = data.topVideos      || [];
+    const rankingSummary = data.rankingSummary || '';
+    const parsed         = data.ai             || {};
+
+    // Render ranking table (live YouTube results)
     renderKeywordRanking(topVideos, rankingSummary);
 
-    // Step 3: Ask AI to score + suggest, grounded in the real top-result titles
-    const topTitlesList = topVideos.slice(0,5).map(v => `- "${v.title}" (${fmtNum(v.views)} views, ${v.channel})`).join('\n');
-    const prompt = `You are a YouTube SEO expert. Analyze this keyword for YouTube: "${kw}"
-Current top-ranking videos for this keyword on YouTube right now:
-${topTitlesList || 'No live data available.'}
-
-Based on this real competition data, return ONLY valid JSON:
-{
-  "score": 72,
-  "competition": "Medium",
-  "note": "2-3 sentence insight about this keyword's SEO potential and competition level, referencing the top videos above",
-  "titles": ["Title idea 1", "Title idea 2", "Title idea 3", "Title idea 4", "Title idea 5"],
-  "related": ["related keyword 1", "related keyword 2", "related keyword 3", "related keyword 4", "related keyword 5", "related keyword 6", "related keyword 7", "related keyword 8"]
-}`;
-    const text   = await callAI(prompt);
-    const parsed = parseJSON(text);
-    const score  = parseInt(parsed.score) || 50;
-    const color  = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--gold)' : 'var(--red)';
-    document.getElementById('kwScoreVal').textContent = score + '/100';
-    document.getElementById('kwScoreVal').style.color = color;
-    document.getElementById('kwScoreFill').style.width       = score + '%';
-    document.getElementById('kwScoreFill').style.background  = color;
-    document.getElementById('kwScoreNote').innerHTML = `<strong style="color:var(--text-primary)">Competition: ${parsed.competition}</strong> — ${parsed.note}`;
-    document.getElementById('kwTitles').innerHTML    = (parsed.titles||[]).map((t,i) => `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${i+1}. ${t}</div>`).join('');
-    document.getElementById('kwRelated').innerHTML   = (parsed.related||[]).map(t => `<span class="seo-tag" onclick="document.getElementById('kwInput').value='${t}';analyzeKeyword()">${t}</span>`).join('');
-    document.getElementById('kwResult').style.display = 'block';
-    await window.incrementKeywordSearch?.();
+    // Render AI analysis scores
+    const score = parseInt(parsed.score) || 50;
+    const color = score >= 70 ? 'var(--green)' : score >= 40 ? 'var(--gold)' : 'var(--red)';
+    document.getElementById('kwScoreVal').textContent      = score + '/100';
+    document.getElementById('kwScoreVal').style.color      = color;
+    document.getElementById('kwScoreFill').style.width     = score + '%';
+    document.getElementById('kwScoreFill').style.background= color;
+    document.getElementById('kwScoreNote').innerHTML       = `<strong style="color:var(--text-primary)">Competition: ${parsed.competition || '—'}</strong> — ${parsed.note || ''}`;
+    document.getElementById('kwTitles').innerHTML          = (parsed.titles||[]).map((t,i) => `<div style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.04)">${i+1}. ${t}</div>`).join('');
+    document.getElementById('kwRelated').innerHTML         = (parsed.related||[]).map(t => `<span class="seo-tag" onclick="document.getElementById('kwInput').value='${t.replace(/'/g,"\\'")}';analyzeKeyword()">${t}</span>`).join('');
+    document.getElementById('kwResult').style.display      = 'block';
     showToast('Keyword analyzed!', 'success');
   } catch(e) {
-    showToast('AI error: ' + e.message, 'error');
+    showToast('Keyword error: ' + e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Analyze Keyword';
   }
@@ -3118,13 +3219,13 @@ function renderKeywordRanking(videos, summary) {
     document.getElementById('kwResult').insertBefore(box, document.getElementById('kwResult').firstChild);
   }
   box.innerHTML = `
-    <div class="card-eyebrow">Live YouTube Ranking & Competition</div>
+    <div class="card-eyebrow">Live YouTube Ranking &amp; Competition</div>
     <div style="font-size:12.5px;color:var(--text-secondary);margin-bottom:10px">${summary}</div>
     ${videos.length ? videos.map((v,i) => `
       <div class="info-row">
         <span class="info-row-key" style="max-width:65%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">#${i+1} ${v.title}</span>
         <span class="info-row-val">${fmtNum(v.views)} views</span>
-      </div>`).join('') : '<div style="font-size:12px;color:var(--text-muted)">No live ranking data — YouTube API key not configured yet.</div>'}
+      </div>`).join('') : '<div style="font-size:12px;color:var(--text-muted)">No live ranking data — YouTube API key not configured on server.</div>'}
   `;
 }
 
