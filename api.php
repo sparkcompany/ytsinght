@@ -1,4 +1,4 @@
-<?php
+ <?php
 /*
  * YTInsight — api.php
  * Backend: Firebase Admin + YouTube Data API v3 + YouTube Analytics API
@@ -28,7 +28,15 @@ define('GOOGLE_CLIENT_ID',    '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.app
 define('GOOGLE_CLIENT_SECRET','');   // <-- paste your client secret here (from Google Cloud Console)
 
 // YouTube Data API server key (create one in Google Cloud Console → Credentials → API key)
-define('YT_SERVER_KEY', '');  // <-- paste your YouTube server API key here
+define('YT_SERVER_KEY', '');  // <-- paste your YouTube Data API server key here
+
+// Gemini API key for SEO generation (Google AI Studio → Get API Key)
+define('GEMINI_API_KEY', '');  // <-- paste your Gemini API key here
+define('GEMINI_MODEL',   'gemini-1.5-flash-latest');
+
+// OpenRouter API key for keyword AI analysis (openrouter.ai → Keys)
+define('OPENROUTER_API_KEY', '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');
+define('OPENROUTER_MODEL',   'google/gemini-flash-1.5');
 
 // Firebase service account JSON path (download from Firebase Console → Project Settings → Service Accounts)
 define('FIREBASE_SA_PATH', __DIR__ . '/firebase-service-account.json');
@@ -49,17 +57,21 @@ try {
     switch ($action) {
         case 'sync_user':              syncUser($body);                break;
         case 'submit_lead':            submitLead($body);             break;
+        case 'analyze_channel':        analyzeChannelUrl($body);      break;
         case 'connect_youtube_channel':connectYouTubeChannel($body); break;
         case 'disconnect_youtube_channel': disconnectChannel($body); break;
         case 'upload_video':           uploadVideo($body);            break;
         case 'get_video_analytics':    getVideoAnalytics($body);      break;
         case 'get_channel_analytics':  getChannelAnalytics($body);    break;
+        case 'generate_seo':           generateSeo($body);            break;
+        case 'analyze_keyword':        analyzeKeyword($body);         break;
+        case 'ai_prompt':              aiPrompt($body);               break;
         case 'admin_send_notification':adminSendNotification($body);  break;
         case 'admin_broadcast':        adminBroadcast($body);         break;
         case 'admin_set_plan':         adminSetPlan($body);           break;
         case 'admin_get_users':        adminGetUsers($body);          break;
         default:
-            jsonOut(['success'=>true,'message'=>'YTInsight API v2.0 ready']);
+            jsonOut(['success'=>true,'message'=>'YTInsight API v2.1 ready']);
     }
 } catch (Throwable $e) {
     jsonErr($e->getMessage(), 500);
@@ -81,6 +93,125 @@ function syncUser(array $b): void {
     ];
     fbUpdate("users/$uid/profile", $data);
     jsonOut(['success'=>true]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTION: analyze_channel
+   ─── Flow ───────────────────────────────────────────────────────────────
+   Resolves a YouTube channel URL or handle, fetches full channel data
+   and recent videos using the server-side YT_SERVER_KEY.
+   Body: { url }
+   ═════════════════════════════════════════════════════════════════════════ */
+function analyzeChannelUrl(array $b): void {
+    $url   = trim($b['url'] ?? '');
+    if (!$url) jsonErr('url is required', 400);
+
+    $ytKey = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
+    if (!$ytKey) jsonErr('YouTube API key not configured on server. Set YT_SERVER_KEY in api.php.', 503);
+
+    $channelId = null;
+
+    // Detect video URL
+    if (preg_match('/(?:v=|youtu\.be\/)([a-zA-Z0-9_\-]{11})/', $url, $vm)) {
+        $vRes = curlGet(
+            'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics'
+            . '&id=' . urlencode($vm[1]) . '&key=' . urlencode($ytKey)
+        );
+        $channelId = $vRes['items'][0]['snippet']['channelId'] ?? null;
+    }
+
+    // Resolve channel from handle / URL
+    if (!$channelId) {
+        $handle = preg_replace('/https?:\/\/(www\.)?youtube\.com\//', '', $url);
+        $handle = ltrim($handle, '@');
+        $handle = explode('/', $handle)[0];
+        $handle = explode('?', $handle)[0];
+
+        // Try forHandle
+        $hRes = curlGet(
+            'https://www.googleapis.com/youtube/v3/channels?part=id'
+            . '&forHandle=@' . urlencode($handle) . '&key=' . urlencode($ytKey)
+        );
+        $channelId = $hRes['items'][0]['id'] ?? null;
+
+        // Fallback: search
+        if (!$channelId) {
+            $sRes = curlGet(
+                'https://www.googleapis.com/youtube/v3/search?part=snippet'
+                . '&q=' . urlencode($handle) . '&type=channel&maxResults=1'
+                . '&key=' . urlencode($ytKey)
+            );
+            $channelId = $sRes['items'][0]['snippet']['channelId'] ?? null;
+        }
+    }
+
+    if (!$channelId) jsonErr('Channel not found. Check the URL or handle.', 404);
+
+    // Fetch full channel data
+    $chRes = curlGet(
+        'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails'
+        . '&id=' . urlencode($channelId) . '&key=' . urlencode($ytKey)
+    );
+    if (empty($chRes['items'])) jsonErr('Could not fetch channel data.', 404);
+
+    $ch  = $chRes['items'][0];
+    $sn  = $ch['snippet']    ?? [];
+    $st  = $ch['statistics'] ?? [];
+    $td  = $ch['topicDetails']['topicCategories'] ?? [];
+    $cat = $td ? str_replace('_', ' ', end(explode('/', $td[0]))) : 'General';
+
+    // Fetch recent videos
+    $vidRes  = curlGet(
+        'https://www.googleapis.com/youtube/v3/search?part=snippet'
+        . '&channelId=' . urlencode($channelId)
+        . '&maxResults=16&order=date&type=video'
+        . '&key=' . urlencode($ytKey)
+    );
+    $videoIds = implode(',', array_filter(array_column(
+        array_column($vidRes['items'] ?? [], 'id'), 'videoId'
+    )));
+
+    $videos = [];
+    if ($videoIds) {
+        $vRes = curlGet(
+            'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails'
+            . '&id=' . urlencode($videoIds) . '&key=' . urlencode($ytKey)
+        );
+        foreach ($vRes['items'] ?? [] as $v) {
+            $vs  = $v['statistics']    ?? [];
+            $dur = $v['contentDetails']['duration'] ?? '';
+            preg_match('/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/', $dur, $dm);
+            $secs = intval($dm[1]??0)*3600 + intval($dm[2]??0)*60 + intval($dm[3]??0);
+            $videos[] = [
+                'videoId'     => $v['id'],
+                'title'       => $v['snippet']['title']           ?? '',
+                'thumbnail'   => $v['snippet']['thumbnails']['medium']['url'] ?? '',
+                'publishedAt' => $v['snippet']['publishedAt']     ?? '',
+                'views'       => intval($vs['viewCount']          ?? 0),
+                'likes'       => intval($vs['likeCount']          ?? 0),
+                'comments'    => intval($vs['commentCount']       ?? 0),
+                'durationSecs'=> $secs,
+                'isShort'     => $secs > 0 && $secs <= 70,
+                'description' => substr($v['snippet']['description'] ?? '', 0, 300),
+            ];
+        }
+    }
+
+    $channelObj = [
+        'channelId'  => $channelId,
+        'title'      => $sn['title']        ?? '',
+        'handle'     => ltrim($sn['customUrl'] ?? '', '@'),
+        'thumbnail'  => $sn['thumbnails']['medium']['url'] ?? $sn['thumbnails']['default']['url'] ?? '',
+        'country'    => $sn['country']      ?? ($ch['brandingSettings']['channel']['country'] ?? ''),
+        'publishedAt'=> $sn['publishedAt']  ?? '',
+        'category'   => $cat,
+        'subscribers'=> intval($st['subscriberCount'] ?? 0),
+        'totalViews' => intval($st['viewCount']       ?? 0),
+        'videoCount' => intval($st['videoCount']      ?? 0),
+        'description'=> substr($sn['description'] ?? '', 0, 500),
+    ];
+
+    jsonOut(['success' => true, 'channel' => $channelObj, 'videos' => $videos]);
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -427,6 +558,245 @@ function getChannelAnalytics(array $b): void {
             . '&dimensions=day&sort=day';
     $res = curlGetAuth($anaUrl, $token);
     jsonOut(['success'=>true, 'rows'=>$res['rows'] ?? [], 'columnHeaders'=>$res['columnHeaders'] ?? []]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTION: ai_prompt  — generic pass-through for frontend callAI() calls
+   Used by: thumbnail generator, any future generic AI prompt
+   Body: { prompt }
+   ═════════════════════════════════════════════════════════════════════════ */
+function aiPrompt(array $b): void {
+    $prompt = trim($b['prompt'] ?? '');
+    if (!$prompt) jsonErr('prompt is required', 400);
+    if (strlen($prompt) > 8000) jsonErr('Prompt too long (max 8000 chars).', 400);
+
+    // Use OpenRouter (Gemini Flash) for generic prompts
+    if (!defined('OPENROUTER_API_KEY') || !OPENROUTER_API_KEY) jsonErr('OpenRouter API key not configured.', 503);
+
+    $parsed = callOpenRouter($prompt);
+    // Return raw text as well for generic text responses
+    jsonOut(['success' => true, 'result' => $parsed, 'text' => json_encode($parsed)]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTION: generate_seo
+   ─── Flow ───────────────────────────────────────────────────────────────
+   1. If videoId provided → fetch video metadata from YouTube Data API
+   2. Build enriched prompt with real channel/video context
+   3. Call Gemini API → return structured SEO package
+   Body: { topic, description?, videoId?, channelContext?, ratio }
+   ═════════════════════════════════════════════════════════════════════════ */
+function generateSeo(array $b): void {
+    $topic        = trim($b['topic']          ?? '');
+    $desc         = trim($b['description']    ?? '');
+    $videoId      = trim($b['videoId']        ?? '');
+    $channelCtx   = trim($b['channelContext'] ?? '');
+    $ratio        = trim($b['ratio']          ?? '16:9');
+    $isShort      = $ratio === '9:16';
+
+    if (!$topic) jsonErr('topic is required', 400);
+    if (!defined('GEMINI_API_KEY') || !GEMINI_API_KEY) jsonErr('Gemini API key not configured on server.', 503);
+
+    $videoMeta = '';
+    $ytKey     = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
+
+    // Step 1: Fetch real video metadata from YouTube if videoId provided
+    if ($videoId && $ytKey) {
+        try {
+            $vRes = curlGet(
+                'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails'
+                . '&id=' . urlencode($videoId) . '&key=' . urlencode($ytKey)
+            );
+            if (!empty($vRes['items'][0])) {
+                $v  = $vRes['items'][0];
+                $vs = $v['statistics'] ?? [];
+                $sn = $v['snippet']    ?? [];
+                $videoMeta = "\nReal video metadata from YouTube:\n"
+                    . "- Title: " . ($sn['title'] ?? '') . "\n"
+                    . "- Channel: " . ($sn['channelTitle'] ?? '') . "\n"
+                    . "- Views: " . number_format(intval($vs['viewCount'] ?? 0)) . "\n"
+                    . "- Likes: " . number_format(intval($vs['likeCount'] ?? 0)) . "\n"
+                    . "- Published: " . ($sn['publishedAt'] ?? '') . "\n"
+                    . "- Description snippet: " . substr($sn['description'] ?? '', 0, 300);
+            }
+        } catch (Throwable $e) { /* optional, continue without */ }
+    }
+
+    $videoType = $isShort ? 'YouTube Shorts (9:16 vertical, 60 seconds max)' : 'YouTube long-form video (16:9 horizontal)';
+
+    $prompt = <<<PROMPT
+You are an elite YouTube SEO expert. Generate a complete, professional, 100% human-like SEO package for a {$videoType}.
+
+Topic: "{$topic}"
+{$desc ? "Context: \"{$desc}\"" : ""}
+{$channelCtx ? "Channel context: {$channelCtx}" : ""}
+{$videoMeta}
+
+Return ONLY valid JSON (no markdown, no explanation):
+{
+  "title": "Compelling SEO-optimized YouTube title under 70 chars — include power words, main keyword near start",
+  "description": "Professional 200-250 word YouTube description. Start with the main keyword in first sentence. Include: what viewers will learn, timestamps section (0:00 Intro, key sections), call to subscribe, social links placeholder, relevant hashtags at end. Make it sound natural and human, not AI-generated.",
+  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12","tag13","tag14","tag15"],
+  "script": "Professional script outline with hook, main content sections, and call to action. Format as: HOOK:\\n[hook text]\\n\\nMAIN CONTENT:\\n[sections]\\n\\nCTA:\\n[call to action]"
+}
+PROMPT;
+
+    $result = callGemini($prompt);
+    jsonOut(['success' => true, 'seo' => $result]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ACTION: analyze_keyword
+   ─── Flow ───────────────────────────────────────────────────────────────
+   1. Use YouTube Data API to search real top-ranking videos for this keyword
+   2. Collect view counts, titles, channel names for competition analysis
+   3. Feed real data + keyword to OpenRouter (Gemini Flash) for AI scoring
+   Body: { keyword }
+   ═════════════════════════════════════════════════════════════════════════ */
+function analyzeKeyword(array $b): void {
+    $kw    = trim($b['keyword'] ?? '');
+    if (!$kw) jsonErr('keyword is required', 400);
+
+    $ytKey = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
+
+    // Step 1: Real YouTube search data
+    $topVideos      = [];
+    $rankingSummary = 'YouTube API key not configured — no live ranking data.';
+
+    if ($ytKey) {
+        try {
+            $sRes = curlGet(
+                'https://www.googleapis.com/youtube/v3/search?part=snippet'
+                . '&q='          . urlencode($kw)
+                . '&type=video&maxResults=10&order=relevance'
+                . '&key='        . urlencode($ytKey)
+            );
+            $ids = implode(',', array_filter(array_column(
+                array_column($sRes['items'] ?? [], 'id'), 'videoId'
+            )));
+
+            if ($ids) {
+                $vRes = curlGet(
+                    'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics'
+                    . '&id='  . urlencode($ids)
+                    . '&key=' . urlencode($ytKey)
+                );
+                foreach ($vRes['items'] ?? [] as $v) {
+                    $topVideos[] = [
+                        'title'       => $v['snippet']['title']        ?? '',
+                        'channel'     => $v['snippet']['channelTitle'] ?? '',
+                        'views'       => intval($v['statistics']['viewCount'] ?? 0),
+                        'likes'       => intval($v['statistics']['likeCount'] ?? 0),
+                        'publishedAt' => $v['snippet']['publishedAt'] ?? '',
+                    ];
+                }
+                $avgViews = $topVideos
+                    ? (int) (array_sum(array_column($topVideos, 'views')) / count($topVideos))
+                    : 0;
+                $rankingSummary = 'Top ' . count($topVideos) . ' ranking videos found. '
+                    . 'Avg views among top results: ' . number_format($avgViews) . '.';
+            }
+        } catch (Throwable $e) {
+            $rankingSummary = 'Could not fetch live YouTube ranking: ' . $e->getMessage();
+        }
+    }
+
+    // Step 2: AI scoring via OpenRouter (Gemini Flash)
+    if (!defined('OPENROUTER_API_KEY') || !OPENROUTER_API_KEY) jsonErr('OpenRouter API key not configured.', 503);
+
+    $topList = '';
+    foreach (array_slice($topVideos, 0, 5) as $v) {
+        $topList .= '- "' . $v['title'] . '" (' . number_format($v['views']) . ' views, ' . $v['channel'] . ")\n";
+    }
+    if (!$topList) $topList = "No live data available.\n";
+
+    $prompt = <<<PROMPT
+You are a YouTube SEO expert. Analyze this keyword for YouTube: "{$kw}"
+Current top-ranking videos for this keyword on YouTube right now:
+{$topList}
+
+Based on this real competition data, return ONLY valid JSON (no markdown):
+{
+  "score": 72,
+  "competition": "Medium",
+  "note": "2-3 sentence insight about this keyword's SEO potential and competition level, referencing the top videos above",
+  "titles": ["Title idea 1", "Title idea 2", "Title idea 3", "Title idea 4", "Title idea 5"],
+  "related": ["related keyword 1", "related keyword 2", "related keyword 3", "related keyword 4", "related keyword 5", "related keyword 6", "related keyword 7", "related keyword 8"]
+}
+PROMPT;
+
+    $aiResult = callOpenRouter($prompt);
+
+    jsonOut([
+        'success'     => true,
+        'topVideos'   => $topVideos,
+        'rankingSummary' => $rankingSummary,
+        'ai'          => $aiResult,
+    ]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   GEMINI API HELPER
+   ═════════════════════════════════════════════════════════════════════════ */
+function callGemini(string $prompt): array {
+    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
+         . GEMINI_MODEL . ':generateContent?key=' . urlencode(GEMINI_API_KEY);
+
+    $body = json_encode([
+        'contents' => [['parts' => [['text' => $prompt]]]],
+        'generationConfig' => ['temperature' => 0.8, 'maxOutputTokens' => 1800],
+    ]);
+
+    $res  = curlRequest('POST', $url, $body, ['Content-Type: application/json']);
+    $text = $res['candidates'][0]['content']['parts'][0]['text'] ?? '';
+    if (!$text) throw new RuntimeException('Empty Gemini response. Check GEMINI_API_KEY.');
+
+    $clean = preg_replace('/^```json\s*/i', '', trim($text));
+    $clean = preg_replace('/```\s*$/', '', $clean);
+    $parsed = json_decode(trim($clean), true);
+
+    if (!is_array($parsed)) {
+        // Try to extract JSON object from text
+        if (preg_match('/\{[\s\S]*\}/', $clean, $m)) {
+            $parsed = json_decode($m[0], true);
+        }
+    }
+    if (!is_array($parsed)) throw new RuntimeException('Could not parse Gemini JSON response.');
+    return $parsed;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   OPENROUTER API HELPER
+   ═════════════════════════════════════════════════════════════════════════ */
+function callOpenRouter(string $prompt): array {
+    $body = json_encode([
+        'model'       => OPENROUTER_MODEL,
+        'messages'    => [['role' => 'user', 'content' => $prompt]],
+        'max_tokens'  => 1500,
+        'temperature' => 0.8,
+    ]);
+
+    $res  = curlRequest('POST', 'https://openrouter.ai/api/v1/chat/completions', $body, [
+        'Authorization: Bearer ' . OPENROUTER_API_KEY,
+        'HTTP-Referer: https://ytinsight.site',
+        'X-Title: YTInsight',
+        'Content-Type: application/json',
+    ]);
+
+    $text = $res['choices'][0]['message']['content'] ?? '';
+    if (!$text) throw new RuntimeException('Empty OpenRouter response. Check OPENROUTER_API_KEY.');
+
+    $clean  = preg_replace('/^```json\s*/i', '', trim($text));
+    $clean  = preg_replace('/```\s*$/', '', $clean);
+    $parsed = json_decode(trim($clean), true);
+
+    if (!is_array($parsed)) {
+        if (preg_match('/\{[\s\S]*\}/', $clean, $m)) {
+            $parsed = json_decode($m[0], true);
+        }
+    }
+    if (!is_array($parsed)) throw new RuntimeException('Could not parse OpenRouter JSON response.');
+    return $parsed;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
