@@ -54,6 +54,10 @@ try {
         case 'upload_video':           uploadVideo($body);            break;
         case 'get_video_analytics':    getVideoAnalytics($body);      break;
         case 'get_channel_analytics':  getChannelAnalytics($body);    break;
+        case 'admin_send_notification':adminSendNotification($body);  break;
+        case 'admin_broadcast':        adminBroadcast($body);         break;
+        case 'admin_set_plan':         adminSetPlan($body);           break;
+        case 'admin_get_users':        adminGetUsers($body);          break;
         default:
             jsonOut(['success'=>true,'message'=>'YTInsight API v2.0 ready']);
     }
@@ -426,7 +430,102 @@ function getChannelAnalytics(array $b): void {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   FIREBASE RTDB HELPERS  (REST API — no SDK needed)
+   ADMIN — verify admin secret
+   ═════════════════════════════════════════════════════════════════════════ */
+define('ADMIN_SECRET', '');  // <-- Set a strong secret password here for admin API calls
+
+function verifyAdmin(array $b): void {
+    $secret = trim($b['adminSecret'] ?? '');
+    if (!ADMIN_SECRET || $secret !== ADMIN_SECRET) jsonErr('Unauthorized', 401);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN: send_notification — send to specific user
+   Body: { adminSecret, targetUid, title, message }
+   ═════════════════════════════════════════════════════════════════════════ */
+function adminSendNotification(array $b): void {
+    verifyAdmin($b);
+    $uid     = trim($b['targetUid'] ?? '');
+    $title   = trim($b['title']     ?? '');
+    $message = trim($b['message']   ?? '');
+    if (!$uid || !$message) jsonErr('Missing targetUid or message', 400);
+    $key = 'notif_' . time() . '_' . substr(md5(rand()),0,6);
+    fbSet("users/$uid/notifications/$key", [
+        'id'        => $key,
+        'title'     => $title ?: 'YTInsight Notice',
+        'message'   => $message,
+        'seen'      => false,
+        'createdAt' => date('c'),
+        'fromAdmin' => true,
+    ]);
+    jsonOut(['success'=>true, 'notifKey'=>$key]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN: broadcast — send to ALL users
+   Body: { adminSecret, title, message }
+   ═════════════════════════════════════════════════════════════════════════ */
+function adminBroadcast(array $b): void {
+    verifyAdmin($b);
+    $title   = trim($b['title']   ?? '');
+    $message = trim($b['message'] ?? '');
+    if (!$message) jsonErr('Missing message', 400);
+    $key = 'bc_' . time() . '_' . substr(md5(rand()),0,6);
+    fbSet("broadcasts/$key", [
+        'id'        => $key,
+        'title'     => $title ?: 'YTInsight Notice',
+        'message'   => $message,
+        'seen'      => false,
+        'createdAt' => date('c'),
+        'fromAdmin' => true,
+    ]);
+    jsonOut(['success'=>true, 'broadcastKey'=>$key]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN: set_plan
+   Body: { adminSecret, targetUid, plan, teamLimit }
+   ═════════════════════════════════════════════════════════════════════════ */
+function adminSetPlan(array $b): void {
+    verifyAdmin($b);
+    $uid   = trim($b['targetUid'] ?? '');
+    $plan  = trim($b['plan']      ?? 'free');
+    $limit = intval($b['teamLimit'] ?? 10);
+    if (!$uid) jsonErr('Missing targetUid', 400);
+    fbUpdate("users/$uid", ['plan'=>$plan, 'teamLimit'=>$limit, 'planSetAt'=>date('c')]);
+    jsonOut(['success'=>true]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN: get_users — returns all users from Firebase
+   Body: { adminSecret }
+   ═════════════════════════════════════════════════════════════════════════ */
+function adminGetUsers(array $b): void {
+    verifyAdmin($b);
+    $tok = fbToken();
+    $url = FIREBASE_DB_URL . '/users.json'
+         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
+    $headers = [];
+    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
+    $data = curlRequest('GET', $url, null, $headers);
+    jsonOut(['success'=>true, 'users'=>$data]);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ADMIN: get_leads — returns contact form submissions
+   ═════════════════════════════════════════════════════════════════════════ */
+function adminGetLeads(array $b): void {
+    verifyAdmin($b);
+    $tok = fbToken();
+    $url = FIREBASE_DB_URL . '/leads.json'
+         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
+    $headers = [];
+    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
+    $data = curlRequest('GET', $url, null, $headers);
+    jsonOut(['success'=>true, 'leads'=>$data]);
+}
+
+
    ═════════════════════════════════════════════════════════════════════════ */
 function fbToken(): string {
     // Use a cached token stored in /tmp for up to 55 minutes
