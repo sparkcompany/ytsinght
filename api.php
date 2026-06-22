@@ -28,10 +28,10 @@ define('GOOGLE_CLIENT_ID',    '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.app
 define('GOOGLE_CLIENT_SECRET','');   // <-- paste your client secret here (from Google Cloud Console)
 
 // YouTube Data API server key (create one in Google Cloud Console → Credentials → API key)
-define('YT_SERVER_KEY', '');  // <-- paste your YouTube Data API server key here
+define('AIzaSyA44sCLBbdsUy7adMW9_ztgs1ypMTJkkYU', '');  // <-- paste your YouTube Data API server key here
 
 // Gemini API key for SEO generation (Google AI Studio → Get API Key)
-define('GEMINI_API_KEY', '');  // <-- paste your Gemini API key here
+define('AQ.Ab8RN6JUco-M9Cc3z2tQB01uo4RcCjGFwgrb7H5XahpylSX52A', '');  // <-- paste your Gemini API key here
 define('GEMINI_MODEL',   'gemini-1.5-flash-latest');
 
 // OpenRouter API key for keyword AI analysis (openrouter.ai → Keys)
