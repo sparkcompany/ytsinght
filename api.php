@@ -1,1077 +1,167 @@
- <?php
-/*
- * YTInsight — api.php
- * Backend: Firebase Admin + YouTube Data API v3 + YouTube Analytics API
- * OAuth Client ID: 808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com
+<?php
+/**
+ * YTInsight - Firebase Configuration Backend
+ * config.php — Server-side only, never exposed to frontend JS
  *
- * SETUP (upload this file alongside index.html):
- *   1. Set your Firebase service-account JSON path below ($FIREBASE_SA_PATH)
- *   2. Set your YouTube Data API server key below ($YT_SERVER_KEY)
- *   3. chmod 600 your service-account JSON
- *   4. Make sure PHP cURL is enabled (php.ini: extension=curl)
+ * Usage:
+ * POST /config.php?action=get_config   → returns Firebase config as JSON (for SDK init)
+ * POST /config.php?action=verify       → verifies a Firebase ID token server-side
+ *
+ * IMPORTANT: Place this file on your server and set correct CORS origin.
+ * NEVER include your Firebase keys directly in frontend HTML/JS.
  */
 
+// ─────────────────────────────────────────────
+// CONFIGURATION — Edit these values
+// ─────────────────────────────────────────────
+define('ALLOWED_ORIGIN', 'https://ytinsight.site'); // Your domain
+
+// Firebase Project Config (Updated with your provided configuration)
+define('FB_API_KEY',          'AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I');
+define('FB_AUTH_DOMAIN',      'insight-4264d.firebaseapp.com');
+define('FB_PROJECT_ID',       'insight-4264d');
+define('FB_STORAGE_BUCKET',   'insight-4264d.firebasestorage.app');
+define('FB_MESSAGING_SENDER', '349243473589');
+define('FB_APP_ID',           '1:349243473589:web:d7169e82d1129aa23cc8fc');
+define('FB_DATABASE_URL',     'https://insight-4264d-default-rtdb.firebaseio.com');
+
+// Admin / Server Key (from Firebase Console → Project Settings → Service Accounts)
+// Used for server-side token verification
+define('FB_SERVER_KEY',       'YOUR_SERVER_KEY_HERE');
+
+// Secret key to protect this endpoint (add ?secret=THIS_KEY from your frontend fetch)
+define('ENDPOINT_SECRET',     'ytinsight_secret_2025_xyz');
+
+// ─────────────────────────────────────────────
+// CORS & Headers
+// ─────────────────────────────────────────────
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if ($origin === ALLOWED_ORIGIN) {
+    header('Access-Control-Allow-Origin: ' . ALLOWED_ORIGIN);
+}
+header('Access-Control-Allow-Methods: POST, GET, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, X-Requested-With');
 header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') { http_response_code(204); exit; }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CONFIG  — edit these values
-   ═════════════════════════════════════════════════════════════════════════ */
-define('FIREBASE_PROJECT_ID', 'spaintoearn');
-define('FIREBASE_DB_URL',     'https://spaintoearn-default-rtdb.firebaseio.com');
-define('FIREBASE_WEB_API_KEY','AIzaSyCdrPLotWyFJXsRcBJrga91LbiAXGicbpY');   // same as in HTML
-define('GOOGLE_CLIENT_ID',    '808342592817-8uj7cfkl9ap7o8fi5hrecc363mcd7n12.apps.googleusercontent.com');
-define('GOOGLE_CLIENT_SECRET','');   // <-- paste your client secret here (from Google Cloud Console)
-
-// YouTube Data API server key (create one in Google Cloud Console → Credentials → API key)
-define('AIzaSyA44sCLBbdsUy7adMW9_ztgs1ypMTJkkYU', '');  // <-- paste your YouTube Data API server key here
-
-// Gemini API key for SEO generation (Google AI Studio → Get API Key)
-define('AQ.Ab8RN6JUco-M9Cc3z2tQB01uo4RcCjGFwgrb7H5XahpylSX52A', '');  // <-- paste your Gemini API key here
-define('GEMINI_MODEL',   'gemini-1.5-flash-latest');
-
-// OpenRouter API key for keyword AI analysis (openrouter.ai → Keys)
-define('OPENROUTER_API_KEY', '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');
-define('OPENROUTER_MODEL',   'google/gemini-flash-1.5');
-
-// Firebase service account JSON path (download from Firebase Console → Project Settings → Service Accounts)
-define('FIREBASE_SA_PATH', __DIR__ . '/firebase-service-account.json');
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ROUTER
-   ═════════════════════════════════════════════════════════════════════════ */
-$method = $_SERVER['REQUEST_METHOD'];
-$action = $_GET['action'] ?? '';
-$body   = [];
-if ($method === 'POST') {
-    $raw  = file_get_contents('php://input');
-    $body = json_decode($raw, true) ?? [];
-    if (empty($action)) $action = $body['action'] ?? '';
-}
-
-try {
-    switch ($action) {
-        case 'sync_user':              syncUser($body);                break;
-        case 'submit_lead':            submitLead($body);             break;
-        case 'analyze_channel':        analyzeChannelUrl($body);      break;
-        case 'connect_youtube_channel':connectYouTubeChannel($body); break;
-        case 'disconnect_youtube_channel': disconnectChannel($body); break;
-        case 'upload_video':           uploadVideo($body);            break;
-        case 'get_video_analytics':    getVideoAnalytics($body);      break;
-        case 'get_channel_analytics':  getChannelAnalytics($body);    break;
-        case 'generate_seo':           generateSeo($body);            break;
-        case 'analyze_keyword':        analyzeKeyword($body);         break;
-        case 'ai_prompt':              aiPrompt($body);               break;
-        case 'admin_send_notification':adminSendNotification($body);  break;
-        case 'admin_broadcast':        adminBroadcast($body);         break;
-        case 'admin_set_plan':         adminSetPlan($body);           break;
-        case 'admin_get_users':        adminGetUsers($body);          break;
-        default:
-            jsonOut(['success'=>true,'message'=>'YTInsight API v2.1 ready']);
-    }
-} catch (Throwable $e) {
-    jsonErr($e->getMessage(), 500);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: sync_user  — create/update user node in Firebase RTDB
-   ═════════════════════════════════════════════════════════════════════════ */
-function syncUser(array $b): void {
-    $uid   = trim($b['uid']   ?? '');
-    $email = trim($b['email'] ?? '');
-    if (!$uid) { jsonOut(['success'=>true]); return; }
-
-    $data = [
-        'uid'       => $uid,
-        'email'     => $email,
-        'name'      => $b['name'] ?? '',
-        'lastLogin' => date('c'),
-    ];
-    fbUpdate("users/$uid/profile", $data);
-    jsonOut(['success'=>true]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: analyze_channel
-   ─── Flow ───────────────────────────────────────────────────────────────
-   Resolves a YouTube channel URL or handle, fetches full channel data
-   and recent videos using the server-side YT_SERVER_KEY.
-   Body: { url }
-   ═════════════════════════════════════════════════════════════════════════ */
-function analyzeChannelUrl(array $b): void {
-    $url   = trim($b['url'] ?? '');
-    if (!$url) jsonErr('url is required', 400);
-
-    $ytKey = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
-    if (!$ytKey) jsonErr('YouTube API key not configured on server. Set YT_SERVER_KEY in api.php.', 503);
-
-    $channelId = null;
-
-    // Detect video URL
-    if (preg_match('/(?:v=|youtu\.be\/)([a-zA-Z0-9_\-]{11})/', $url, $vm)) {
-        $vRes = curlGet(
-            'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics'
-            . '&id=' . urlencode($vm[1]) . '&key=' . urlencode($ytKey)
-        );
-        $channelId = $vRes['items'][0]['snippet']['channelId'] ?? null;
-    }
-
-    // Resolve channel from handle / URL
-    if (!$channelId) {
-        $handle = preg_replace('/https?:\/\/(www\.)?youtube\.com\//', '', $url);
-        $handle = ltrim($handle, '@');
-        $handle = explode('/', $handle)[0];
-        $handle = explode('?', $handle)[0];
-
-        // Try forHandle
-        $hRes = curlGet(
-            'https://www.googleapis.com/youtube/v3/channels?part=id'
-            . '&forHandle=@' . urlencode($handle) . '&key=' . urlencode($ytKey)
-        );
-        $channelId = $hRes['items'][0]['id'] ?? null;
-
-        // Fallback: search
-        if (!$channelId) {
-            $sRes = curlGet(
-                'https://www.googleapis.com/youtube/v3/search?part=snippet'
-                . '&q=' . urlencode($handle) . '&type=channel&maxResults=1'
-                . '&key=' . urlencode($ytKey)
-            );
-            $channelId = $sRes['items'][0]['snippet']['channelId'] ?? null;
-        }
-    }
-
-    if (!$channelId) jsonErr('Channel not found. Check the URL or handle.', 404);
-
-    // Fetch full channel data
-    $chRes = curlGet(
-        'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails'
-        . '&id=' . urlencode($channelId) . '&key=' . urlencode($ytKey)
-    );
-    if (empty($chRes['items'])) jsonErr('Could not fetch channel data.', 404);
-
-    $ch  = $chRes['items'][0];
-    $sn  = $ch['snippet']    ?? [];
-    $st  = $ch['statistics'] ?? [];
-    $td  = $ch['topicDetails']['topicCategories'] ?? [];
-    $cat = $td ? str_replace('_', ' ', end(explode('/', $td[0]))) : 'General';
-
-    // Fetch recent videos
-    $vidRes  = curlGet(
-        'https://www.googleapis.com/youtube/v3/search?part=snippet'
-        . '&channelId=' . urlencode($channelId)
-        . '&maxResults=16&order=date&type=video'
-        . '&key=' . urlencode($ytKey)
-    );
-    $videoIds = implode(',', array_filter(array_column(
-        array_column($vidRes['items'] ?? [], 'id'), 'videoId'
-    )));
-
-    $videos = [];
-    if ($videoIds) {
-        $vRes = curlGet(
-            'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails'
-            . '&id=' . urlencode($videoIds) . '&key=' . urlencode($ytKey)
-        );
-        foreach ($vRes['items'] ?? [] as $v) {
-            $vs  = $v['statistics']    ?? [];
-            $dur = $v['contentDetails']['duration'] ?? '';
-            preg_match('/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/', $dur, $dm);
-            $secs = intval($dm[1]??0)*3600 + intval($dm[2]??0)*60 + intval($dm[3]??0);
-            $videos[] = [
-                'videoId'     => $v['id'],
-                'title'       => $v['snippet']['title']           ?? '',
-                'thumbnail'   => $v['snippet']['thumbnails']['medium']['url'] ?? '',
-                'publishedAt' => $v['snippet']['publishedAt']     ?? '',
-                'views'       => intval($vs['viewCount']          ?? 0),
-                'likes'       => intval($vs['likeCount']          ?? 0),
-                'comments'    => intval($vs['commentCount']       ?? 0),
-                'durationSecs'=> $secs,
-                'isShort'     => $secs > 0 && $secs <= 70,
-                'description' => substr($v['snippet']['description'] ?? '', 0, 300),
-            ];
-        }
-    }
-
-    $channelObj = [
-        'channelId'  => $channelId,
-        'title'      => $sn['title']        ?? '',
-        'handle'     => ltrim($sn['customUrl'] ?? '', '@'),
-        'thumbnail'  => $sn['thumbnails']['medium']['url'] ?? $sn['thumbnails']['default']['url'] ?? '',
-        'country'    => $sn['country']      ?? ($ch['brandingSettings']['channel']['country'] ?? ''),
-        'publishedAt'=> $sn['publishedAt']  ?? '',
-        'category'   => $cat,
-        'subscribers'=> intval($st['subscriberCount'] ?? 0),
-        'totalViews' => intval($st['viewCount']       ?? 0),
-        'videoCount' => intval($st['videoCount']      ?? 0),
-        'description'=> substr($sn['description'] ?? '', 0, 500),
-    ];
-
-    jsonOut(['success' => true, 'channel' => $channelObj, 'videos' => $videos]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: submit_lead
-   ═════════════════════════════════════════════════════════════════════════ */
-function submitLead(array $b): void {
-    $data = [
-        'name'     => $b['name']     ?? '',
-        'email'    => $b['email']    ?? '',
-        'whatsapp' => $b['whatsapp'] ?? '',
-        'message'  => $b['message']  ?? '',
-        'at'       => date('c'),
-    ];
-    $key = 'lead_' . time() . '_' . substr(md5($data['email']),0,6);
-    fbSet("leads/$key", $data);
-    jsonOut(['success'=>true]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: connect_youtube_channel
-   ─── Flow ───────────────────────────────────────────────────────────────
-   Frontend sends: { uid, accessToken }
-   We:
-     1. Verify token via Google tokeninfo
-     2. Call YouTube Data API channels.list (mine=true) using access token
-     3. Call YouTube Analytics API for views/watchtime (if scope granted)
-     4. Save everything to Firebase RTDB users/{uid}/myChannel
-     5. Return channel object to frontend
-   ═════════════════════════════════════════════════════════════════════════ */
-function connectYouTubeChannel(array $b): void {
-    $uid   = trim($b['uid']         ?? '');
-    $token = trim($b['accessToken'] ?? '');
-    if (!$uid || !$token) jsonErr('Missing uid or accessToken', 400);
-
-    // 1. Verify the token
-    $info = curlGet("https://oauth2.googleapis.com/tokeninfo?access_token=" . urlencode($token));
-    if (!empty($info['error'])) jsonErr('Invalid Google access token: ' . ($info['error_description'] ?? $info['error']), 401);
-
-    // 2. YouTube Data API — channel info (mine=true uses the access token)
-    $chRes = curlGetAuth(
-        'https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics,brandingSettings,topicDetails&mine=true',
-        $token
-    );
-    if (empty($chRes['items'])) jsonErr('No YouTube channel found for this Google account. Make sure the account has a YouTube channel.', 404);
-
-    $ch  = $chRes['items'][0];
-    $sn  = $ch['snippet']    ?? [];
-    $st  = $ch['statistics'] ?? [];
-    $td  = $ch['topicDetails']['topicCategories'] ?? [];
-    $cat = !empty($td[0]) ? explode('/', $td[0]) : [];
-    $cat = end($cat) ?: 'General';
-    $cat = str_replace('_', ' ', $cat);
-
-    $channelId = $ch['id'];
-
-    // 3. Fetch recent videos via YouTube Data API search (uses access token or server key)
-    $ytKey      = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
-    $videosData = [];
-    try {
-        $searchUrl = 'https://www.googleapis.com/youtube/v3/search?part=snippet'
-                   . '&channelId=' . urlencode($channelId)
-                   . '&maxResults=20&order=date&type=video';
-        $srRes = $ytKey
-            ? curlGet($searchUrl . '&key=' . urlencode($ytKey))
-            : curlGetAuth($searchUrl, $token);
-
-        $videoIds = array_column(array_column($srRes['items'] ?? [], 'id'), 'videoId');
-        $videoIds = array_filter($videoIds);
-
-        if ($videoIds) {
-            $vidUrl = 'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails'
-                    . '&id=' . urlencode(implode(',', $videoIds));
-            $vRes = $ytKey
-                ? curlGet($vidUrl . '&key=' . urlencode($ytKey))
-                : curlGetAuth($vidUrl, $token);
-
-            foreach (($vRes['items'] ?? []) as $v) {
-                $vs = $v['statistics'] ?? [];
-                $dur = $v['contentDetails']['duration'] ?? '';
-                preg_match('/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/', $dur, $dm);
-                $secs = intval($dm[1]??0)*3600 + intval($dm[2]??0)*60 + intval($dm[3]??0);
-                $videosData[] = [
-                    'videoId'      => $v['id'],
-                    'title'        => $v['snippet']['title']        ?? '',
-                    'thumbnail'    => $v['snippet']['thumbnails']['medium']['url'] ?? '',
-                    'publishedAt'  => $v['snippet']['publishedAt']  ?? '',
-                    'views'        => intval($vs['viewCount']        ?? 0),
-                    'likes'        => intval($vs['likeCount']        ?? 0),
-                    'comments'     => intval($vs['commentCount']     ?? 0),
-                    'durationSecs' => $secs,
-                    'isShort'      => $secs > 0 && $secs <= 70,
-                    'subsGained'   => 0,   // Analytics API needed for this
-                    'watchTimeMinutes' => 0,
-                ];
-            }
-        }
-    } catch (Throwable $e) { /* videos optional, continue */ }
-
-    // 4. YouTube Analytics API — channel-level metrics (last 30 days)
-    $viewsToday     = 0;
-    $viewsYesterday = 0;
-    $viewsThisMonth = 0;
-    $watchTimeTotal = 0;
-    $totalLikes     = 0;
-    try {
-        $endDate   = date('Y-m-d');
-        $startDate = date('Y-m-d', strtotime('-30 days'));
-        $anaUrl    = 'https://youtubeanalytics.googleapis.com/v2/reports'
-                   . '?ids=channel==' . urlencode($channelId)
-                   . '&startDate=' . $startDate
-                   . '&endDate='   . $endDate
-                   . '&metrics=views,estimatedMinutesWatched,likes'
-                   . '&dimensions=day'
-                   . '&sort=day';
-        $anaRes = curlGetAuth($anaUrl, $token);
-        if (!empty($anaRes['rows'])) {
-            $rows = $anaRes['rows'];
-            $viewsThisMonth = array_sum(array_column($rows, 0));
-            $watchTimeTotal = array_sum(array_column($rows, 1));
-            $totalLikes     = array_sum(array_column($rows, 2));
-            $today     = date('Y-m-d');
-            $yesterday = date('Y-m-d', strtotime('-1 day'));
-            foreach ($rows as $row) {
-                if (($row[0] ?? '') === $today)     $viewsToday     = intval($row[1] ?? 0);
-                if (($row[0] ?? '') === $yesterday) $viewsYesterday = intval($row[1] ?? 0);
-            }
-        }
-    } catch (Throwable $e) { /* analytics optional */ }
-
-    // Calculate total likes from video list if analytics didn't return
-    if (!$totalLikes && $videosData) {
-        $totalLikes = array_sum(array_column($videosData, 'likes'));
-    }
-
-    // 5. Build channel object and save to Firebase
-    $channelObj = [
-        'channelId'        => $channelId,
-        'title'            => $sn['title']       ?? '',
-        'handle'           => ltrim($sn['customUrl'] ?? '', '@'),
-        'description'      => $sn['description'] ?? '',
-        'thumbnail'        => $sn['thumbnails']['medium']['url'] ?? $sn['thumbnails']['default']['url'] ?? '',
-        'country'          => $sn['country']     ?? ($ch['brandingSettings']['channel']['country'] ?? ''),
-        'publishedAt'      => $sn['publishedAt'] ?? '',
-        'category'         => $cat,
-        'subscribers'      => intval($st['subscriberCount'] ?? 0),
-        'totalViews'       => intval($st['viewCount']       ?? 0),
-        'videoCount'       => intval($st['videoCount']      ?? 0),
-        'totalLikes'       => $totalLikes,
-        'viewsToday'       => $viewsToday,
-        'viewsYesterday'   => $viewsYesterday,
-        'viewsThisMonth'   => $viewsThisMonth,
-        'watchTimeMinutes' => $watchTimeTotal,
-        'videos'           => $videosData,
-        'lastSynced'       => date('c'),
-        'accessToken'      => $token,  // stored for future API calls (expires ~1h; refresh flow TODO)
-    ];
-
-    fbSet("users/$uid/myChannel", $channelObj);
-    jsonOut(['success'=>true, 'channel'=>$channelObj]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: disconnect_youtube_channel
-   ═════════════════════════════════════════════════════════════════════════ */
-function disconnectChannel(array $b): void {
-    $uid = trim($b['uid'] ?? '');
-    if ($uid) fbDelete("users/$uid/myChannel");
-    jsonOut(['success'=>true]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: upload_video
-   Body: { uid, accessToken, title, description, tags[], hashtags[],
-           privacyStatus (public|private|unlisted), publishAt (ISO or null),
-           videoBase64 (optional, for small files) }
-   ═════════════════════════════════════════════════════════════════════════ */
-function uploadVideo(array $b): void {
-    $uid     = trim($b['uid']          ?? '');
-    $token   = trim($b['accessToken']  ?? '');
-    $title   = trim($b['title']        ?? '');
-    $desc    = trim($b['description']  ?? '');
-    $tags    = $b['tags']    ?? [];
-    $privacy = $b['privacyStatus'] ?? 'private';
-    $pubAt   = $b['publishAt']     ?? null;   // ISO string for scheduled
-
-    if (!$uid || !$token)  jsonErr('Missing uid or accessToken', 400);
-    if (!$title)           jsonErr('Video title is required', 400);
-
-    // Build video resource
-    $resource = [
-        'snippet' => [
-            'title'       => $title,
-            'description' => $desc,
-            'tags'        => array_values(array_filter($tags)),
-            'categoryId'  => '22',  // People & Blogs; user can change in YouTube Studio
-        ],
-        'status' => [
-            'privacyStatus'         => in_array($privacy, ['public','private','unlisted']) ? $privacy : 'private',
-            'selfDeclaredMadeForKids' => false,
-        ],
-    ];
-    if ($pubAt && $privacy === 'private') {
-        // Scheduled upload: set publishAt + unlisted trick
-        $resource['status']['publishAt']    = $pubAt;
-        $resource['status']['privacyStatus'] = 'private';
-    }
-
-    // YouTube Data API — videos.insert  (resumable upload for actual file)
-    // Here we do metadata-only insert; the client streams the file separately.
-    // For simplicity we use the simple upload with base64 data if provided.
-    $videoBase64 = $b['videoBase64'] ?? null;
-
-    if ($videoBase64) {
-        // Decode and upload (works for files < 256MB; YouTube allows up to 256GB via resumable)
-        $videoBytes = base64_decode($videoBase64);
-        if (!$videoBytes) jsonErr('Invalid video data', 400);
-
-        // Step 1: initiate resumable upload
-        $initUrl = 'https://www.googleapis.com/upload/youtube/v3/videos'
-                 . '?uploadType=resumable&part=snippet,status';
-        $initRes = curlPostAuth($initUrl, $token, json_encode($resource), [
-            'Content-Type: application/json',
-            'X-Upload-Content-Type: video/*',
-            'X-Upload-Content-Length: ' . strlen($videoBytes),
-        ], true /* return headers */);
-
-        $uploadUrl = $initRes['Location'] ?? '';
-        if (!$uploadUrl) jsonErr('Could not initiate YouTube upload. Check token permissions.', 502);
-
-        // Step 2: PUT the video bytes
-        $uploadResult = curlPutRaw($uploadUrl, $videoBytes, 'video/*');
-        if (empty($uploadResult['id'])) jsonErr('Upload failed: ' . json_encode($uploadResult), 502);
-
-        $videoId = $uploadResult['id'];
-    } else {
-        // No video bytes — just insert metadata and return a resumable upload URL
-        // Frontend will use this URL to upload the file directly to YouTube
-        $initUrl = 'https://www.googleapis.com/upload/youtube/v3/videos'
-                 . '?uploadType=resumable&part=snippet,status';
-        $initRes = curlPostAuth($initUrl, $token, json_encode($resource), [
-            'Content-Type: application/json',
-            'X-Upload-Content-Type: video/*',
-        ], true);
-
-        $uploadUrl = $initRes['Location'] ?? '';
-        if (!$uploadUrl) jsonErr('Could not get upload URL. Check YouTube permissions.', 502);
-
-        // Save pending upload to Firebase
-        $pending = [
-            'title'        => $title,
-            'description'  => $desc,
-            'tags'         => $tags,
-            'privacyStatus'=> $privacy,
-            'publishAt'    => $pubAt,
-            'uploadUrl'    => $uploadUrl,
-            'status'       => 'pending_upload',
-            'createdAt'    => date('c'),
-        ];
-        $key = 'upload_' . time();
-        fbSet("users/$uid/uploads/$key", $pending);
-
-        jsonOut(['success'=>true, 'uploadUrl'=>$uploadUrl, 'uploadKey'=>$key,
-                 'message'=>'Use the uploadUrl to PUT your video file directly to YouTube.']);
-        return;
-    }
-
-    // Save completed upload record
-    $record = [
-        'videoId'      => $videoId,
-        'title'        => $title,
-        'description'  => $desc,
-        'tags'         => $tags,
-        'privacyStatus'=> $privacy,
-        'publishAt'    => $pubAt,
-        'status'       => 'uploaded',
-        'uploadedAt'   => date('c'),
-    ];
-    fbSet("users/$uid/uploads/$videoId", $record);
-    jsonOut(['success'=>true, 'videoId'=>$videoId,
-             'videoUrl'=> "https://www.youtube.com/watch?v=$videoId"]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: get_video_analytics  — per-video stats for prediction
-   Body: { uid, accessToken, videoId, channelId }
-   ═════════════════════════════════════════════════════════════════════════ */
-function getVideoAnalytics(array $b): void {
-    $token     = trim($b['accessToken'] ?? '');
-    $videoId   = trim($b['videoId']     ?? '');
-    $channelId = trim($b['channelId']   ?? '');
-    if (!$token || !$videoId) jsonErr('Missing accessToken or videoId', 400);
-
-    $endDate   = date('Y-m-d');
-    $startDate = date('Y-m-d', strtotime('-28 days'));
-
-    try {
-        $anaUrl = 'https://youtubeanalytics.googleapis.com/v2/reports'
-                . '?ids=channel==' . urlencode($channelId ?: 'mine')
-                . '&startDate=' . $startDate
-                . '&endDate='   . $endDate
-                . '&metrics=views,estimatedMinutesWatched,likes,subscribersGained,averageViewDuration'
-                . '&dimensions=day'
-                . '&filters=video==' . urlencode($videoId)
-                . '&sort=day';
-        $rows = (curlGetAuth($anaUrl, $token))['rows'] ?? [];
-
-        $totalViews   = array_sum(array_column($rows, 0));
-        $watchTime    = array_sum(array_column($rows, 1));
-        $likes        = array_sum(array_column($rows, 2));
-        $subsGained   = array_sum(array_column($rows, 3));
-        $avgViewDur   = $rows ? array_sum(array_column($rows, 4)) / count($rows) : 0;
-
-        jsonOut([
-            'success'       => true,
-            'videoId'       => $videoId,
-            'views'         => $totalViews,
-            'watchTimeMin'  => $watchTime,
-            'likes'         => $likes,
-            'subsGained'    => $subsGained,
-            'avgViewDurSec' => round($avgViewDur),
-            'dailyRows'     => $rows,
-        ]);
-    } catch (Throwable $e) {
-        jsonErr('Analytics error: ' . $e->getMessage(), 502);
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: get_channel_analytics
-   ═════════════════════════════════════════════════════════════════════════ */
-function getChannelAnalytics(array $b): void {
-    $token     = trim($b['accessToken'] ?? '');
-    $channelId = trim($b['channelId']   ?? '');
-    if (!$token) jsonErr('Missing accessToken', 400);
-
-    $endDate   = date('Y-m-d');
-    $startDate = date('Y-m-d', strtotime('-30 days'));
-
-    $anaUrl = 'https://youtubeanalytics.googleapis.com/v2/reports'
-            . '?ids=channel==' . urlencode($channelId ?: 'mine')
-            . '&startDate=' . $startDate
-            . '&endDate='   . $endDate
-            . '&metrics=views,estimatedMinutesWatched,likes,subscribersGained'
-            . '&dimensions=day&sort=day';
-    $res = curlGetAuth($anaUrl, $token);
-    jsonOut(['success'=>true, 'rows'=>$res['rows'] ?? [], 'columnHeaders'=>$res['columnHeaders'] ?? []]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: ai_prompt  — generic pass-through for frontend callAI() calls
-   Used by: thumbnail generator, any future generic AI prompt
-   Body: { prompt }
-   ═════════════════════════════════════════════════════════════════════════ */
-function aiPrompt(array $b): void {
-    $prompt = trim($b['prompt'] ?? '');
-    if (!$prompt) jsonErr('prompt is required', 400);
-    if (strlen($prompt) > 8000) jsonErr('Prompt too long (max 8000 chars).', 400);
-
-    // Use OpenRouter (Gemini Flash) for generic prompts
-    if (!defined('OPENROUTER_API_KEY') || !OPENROUTER_API_KEY) jsonErr('OpenRouter API key not configured.', 503);
-
-    $parsed = callOpenRouter($prompt);
-    // Return raw text as well for generic text responses
-    jsonOut(['success' => true, 'result' => $parsed, 'text' => json_encode($parsed)]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: generate_seo
-   ─── Flow ───────────────────────────────────────────────────────────────
-   1. If videoId provided → fetch video metadata from YouTube Data API
-   2. Build enriched prompt with real channel/video context
-   3. Call Gemini API → return structured SEO package
-   Body: { topic, description?, videoId?, channelContext?, ratio }
-   ═════════════════════════════════════════════════════════════════════════ */
-function generateSeo(array $b): void {
-    $topic        = trim($b['topic']          ?? '');
-    $desc         = trim($b['description']    ?? '');
-    $videoId      = trim($b['videoId']        ?? '');
-    $channelCtx   = trim($b['channelContext'] ?? '');
-    $ratio        = trim($b['ratio']          ?? '16:9');
-    $isShort      = $ratio === '9:16';
-
-    if (!$topic) jsonErr('topic is required', 400);
-    if (!defined('GEMINI_API_KEY') || !GEMINI_API_KEY) jsonErr('Gemini API key not configured on server.', 503);
-
-    $videoMeta = '';
-    $ytKey     = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
-
-    // Step 1: Fetch real video metadata from YouTube if videoId provided
-    if ($videoId && $ytKey) {
-        try {
-            $vRes = curlGet(
-                'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics,contentDetails'
-                . '&id=' . urlencode($videoId) . '&key=' . urlencode($ytKey)
-            );
-            if (!empty($vRes['items'][0])) {
-                $v  = $vRes['items'][0];
-                $vs = $v['statistics'] ?? [];
-                $sn = $v['snippet']    ?? [];
-                $videoMeta = "\nReal video metadata from YouTube:\n"
-                    . "- Title: " . ($sn['title'] ?? '') . "\n"
-                    . "- Channel: " . ($sn['channelTitle'] ?? '') . "\n"
-                    . "- Views: " . number_format(intval($vs['viewCount'] ?? 0)) . "\n"
-                    . "- Likes: " . number_format(intval($vs['likeCount'] ?? 0)) . "\n"
-                    . "- Published: " . ($sn['publishedAt'] ?? '') . "\n"
-                    . "- Description snippet: " . substr($sn['description'] ?? '', 0, 300);
-            }
-        } catch (Throwable $e) { /* optional, continue without */ }
-    }
-
-    $videoType = $isShort ? 'YouTube Shorts (9:16 vertical, 60 seconds max)' : 'YouTube long-form video (16:9 horizontal)';
-
-    $prompt = <<<PROMPT
-You are an elite YouTube SEO expert. Generate a complete, professional, 100% human-like SEO package for a {$videoType}.
-
-Topic: "{$topic}"
-{$desc ? "Context: \"{$desc}\"" : ""}
-{$channelCtx ? "Channel context: {$channelCtx}" : ""}
-{$videoMeta}
-
-Return ONLY valid JSON (no markdown, no explanation):
-{
-  "title": "Compelling SEO-optimized YouTube title under 70 chars — include power words, main keyword near start",
-  "description": "Professional 200-250 word YouTube description. Start with the main keyword in first sentence. Include: what viewers will learn, timestamps section (0:00 Intro, key sections), call to subscribe, social links placeholder, relevant hashtags at end. Make it sound natural and human, not AI-generated.",
-  "tags": ["tag1","tag2","tag3","tag4","tag5","tag6","tag7","tag8","tag9","tag10","tag11","tag12","tag13","tag14","tag15"],
-  "script": "Professional script outline with hook, main content sections, and call to action. Format as: HOOK:\\n[hook text]\\n\\nMAIN CONTENT:\\n[sections]\\n\\nCTA:\\n[call to action]"
-}
-PROMPT;
-
-    $result = callGemini($prompt);
-    jsonOut(['success' => true, 'seo' => $result]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ACTION: analyze_keyword
-   ─── Flow ───────────────────────────────────────────────────────────────
-   1. Use YouTube Data API to search real top-ranking videos for this keyword
-   2. Collect view counts, titles, channel names for competition analysis
-   3. Feed real data + keyword to OpenRouter (Gemini Flash) for AI scoring
-   Body: { keyword }
-   ═════════════════════════════════════════════════════════════════════════ */
-function analyzeKeyword(array $b): void {
-    $kw    = trim($b['keyword'] ?? '');
-    if (!$kw) jsonErr('keyword is required', 400);
-
-    $ytKey = defined('YT_SERVER_KEY') && YT_SERVER_KEY ? YT_SERVER_KEY : null;
-
-    // Step 1: Real YouTube search data
-    $topVideos      = [];
-    $rankingSummary = 'YouTube API key not configured — no live ranking data.';
-
-    if ($ytKey) {
-        try {
-            $sRes = curlGet(
-                'https://www.googleapis.com/youtube/v3/search?part=snippet'
-                . '&q='          . urlencode($kw)
-                . '&type=video&maxResults=10&order=relevance'
-                . '&key='        . urlencode($ytKey)
-            );
-            $ids = implode(',', array_filter(array_column(
-                array_column($sRes['items'] ?? [], 'id'), 'videoId'
-            )));
-
-            if ($ids) {
-                $vRes = curlGet(
-                    'https://www.googleapis.com/youtube/v3/videos?part=snippet,statistics'
-                    . '&id='  . urlencode($ids)
-                    . '&key=' . urlencode($ytKey)
-                );
-                foreach ($vRes['items'] ?? [] as $v) {
-                    $topVideos[] = [
-                        'title'       => $v['snippet']['title']        ?? '',
-                        'channel'     => $v['snippet']['channelTitle'] ?? '',
-                        'views'       => intval($v['statistics']['viewCount'] ?? 0),
-                        'likes'       => intval($v['statistics']['likeCount'] ?? 0),
-                        'publishedAt' => $v['snippet']['publishedAt'] ?? '',
-                    ];
-                }
-                $avgViews = $topVideos
-                    ? (int) (array_sum(array_column($topVideos, 'views')) / count($topVideos))
-                    : 0;
-                $rankingSummary = 'Top ' . count($topVideos) . ' ranking videos found. '
-                    . 'Avg views among top results: ' . number_format($avgViews) . '.';
-            }
-        } catch (Throwable $e) {
-            $rankingSummary = 'Could not fetch live YouTube ranking: ' . $e->getMessage();
-        }
-    }
-
-    // Step 2: AI scoring via OpenRouter (Gemini Flash)
-    if (!defined('OPENROUTER_API_KEY') || !OPENROUTER_API_KEY) jsonErr('OpenRouter API key not configured.', 503);
-
-    $topList = '';
-    foreach (array_slice($topVideos, 0, 5) as $v) {
-        $topList .= '- "' . $v['title'] . '" (' . number_format($v['views']) . ' views, ' . $v['channel'] . ")\n";
-    }
-    if (!$topList) $topList = "No live data available.\n";
-
-    $prompt = <<<PROMPT
-You are a YouTube SEO expert. Analyze this keyword for YouTube: "{$kw}"
-Current top-ranking videos for this keyword on YouTube right now:
-{$topList}
-
-Based on this real competition data, return ONLY valid JSON (no markdown):
-{
-  "score": 72,
-  "competition": "Medium",
-  "note": "2-3 sentence insight about this keyword's SEO potential and competition level, referencing the top videos above",
-  "titles": ["Title idea 1", "Title idea 2", "Title idea 3", "Title idea 4", "Title idea 5"],
-  "related": ["related keyword 1", "related keyword 2", "related keyword 3", "related keyword 4", "related keyword 5", "related keyword 6", "related keyword 7", "related keyword 8"]
-}
-PROMPT;
-
-    $aiResult = callOpenRouter($prompt);
-
-    jsonOut([
-        'success'     => true,
-        'topVideos'   => $topVideos,
-        'rankingSummary' => $rankingSummary,
-        'ai'          => $aiResult,
-    ]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   GEMINI API HELPER
-   ═════════════════════════════════════════════════════════════════════════ */
-function callGemini(string $prompt): array {
-    $url = 'https://generativelanguage.googleapis.com/v1beta/models/'
-         . GEMINI_MODEL . ':generateContent?key=' . urlencode(GEMINI_API_KEY);
-
-    $body = json_encode([
-        'contents' => [['parts' => [['text' => $prompt]]]],
-        'generationConfig' => ['temperature' => 0.8, 'maxOutputTokens' => 1800],
-    ]);
-
-    $res  = curlRequest('POST', $url, $body, ['Content-Type: application/json']);
-    $text = $res['candidates'][0]['content']['parts'][0]['text'] ?? '';
-    if (!$text) throw new RuntimeException('Empty Gemini response. Check GEMINI_API_KEY.');
-
-    $clean = preg_replace('/^```json\s*/i', '', trim($text));
-    $clean = preg_replace('/```\s*$/', '', $clean);
-    $parsed = json_decode(trim($clean), true);
-
-    if (!is_array($parsed)) {
-        // Try to extract JSON object from text
-        if (preg_match('/\{[\s\S]*\}/', $clean, $m)) {
-            $parsed = json_decode($m[0], true);
-        }
-    }
-    if (!is_array($parsed)) throw new RuntimeException('Could not parse Gemini JSON response.');
-    return $parsed;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   OPENROUTER API HELPER
-   ═════════════════════════════════════════════════════════════════════════ */
-function callOpenRouter(string $prompt): array {
-    $body = json_encode([
-        'model'       => OPENROUTER_MODEL,
-        'messages'    => [['role' => 'user', 'content' => $prompt]],
-        'max_tokens'  => 1500,
-        'temperature' => 0.8,
-    ]);
-
-    $res  = curlRequest('POST', 'https://openrouter.ai/api/v1/chat/completions', $body, [
-        'Authorization: Bearer ' . OPENROUTER_API_KEY,
-        'HTTP-Referer: https://ytinsight.site',
-        'X-Title: YTInsight',
-        'Content-Type: application/json',
-    ]);
-
-    $text = $res['choices'][0]['message']['content'] ?? '';
-    if (!$text) throw new RuntimeException('Empty OpenRouter response. Check OPENROUTER_API_KEY.');
-
-    $clean  = preg_replace('/^```json\s*/i', '', trim($text));
-    $clean  = preg_replace('/```\s*$/', '', $clean);
-    $parsed = json_decode(trim($clean), true);
-
-    if (!is_array($parsed)) {
-        if (preg_match('/\{[\s\S]*\}/', $clean, $m)) {
-            $parsed = json_decode($m[0], true);
-        }
-    }
-    if (!is_array($parsed)) throw new RuntimeException('Could not parse OpenRouter JSON response.');
-    return $parsed;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN — verify admin secret
-   ═════════════════════════════════════════════════════════════════════════ */
-define('ADMIN_SECRET', '');  // <-- Set a strong secret password here for admin API calls
-
-function verifyAdmin(array $b): void {
-    $secret = trim($b['adminSecret'] ?? '');
-    if (!ADMIN_SECRET || $secret !== ADMIN_SECRET) jsonErr('Unauthorized', 401);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN: send_notification — send to specific user
-   Body: { adminSecret, targetUid, title, message }
-   ═════════════════════════════════════════════════════════════════════════ */
-function adminSendNotification(array $b): void {
-    verifyAdmin($b);
-    $uid     = trim($b['targetUid'] ?? '');
-    $title   = trim($b['title']     ?? '');
-    $message = trim($b['message']   ?? '');
-    if (!$uid || !$message) jsonErr('Missing targetUid or message', 400);
-    $key = 'notif_' . time() . '_' . substr(md5(rand()),0,6);
-    fbSet("users/$uid/notifications/$key", [
-        'id'        => $key,
-        'title'     => $title ?: 'YTInsight Notice',
-        'message'   => $message,
-        'seen'      => false,
-        'createdAt' => date('c'),
-        'fromAdmin' => true,
-    ]);
-    jsonOut(['success'=>true, 'notifKey'=>$key]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN: broadcast — send to ALL users
-   Body: { adminSecret, title, message }
-   ═════════════════════════════════════════════════════════════════════════ */
-function adminBroadcast(array $b): void {
-    verifyAdmin($b);
-    $title   = trim($b['title']   ?? '');
-    $message = trim($b['message'] ?? '');
-    if (!$message) jsonErr('Missing message', 400);
-    $key = 'bc_' . time() . '_' . substr(md5(rand()),0,6);
-    fbSet("broadcasts/$key", [
-        'id'        => $key,
-        'title'     => $title ?: 'YTInsight Notice',
-        'message'   => $message,
-        'seen'      => false,
-        'createdAt' => date('c'),
-        'fromAdmin' => true,
-    ]);
-    jsonOut(['success'=>true, 'broadcastKey'=>$key]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN: set_plan
-   Body: { adminSecret, targetUid, plan, teamLimit }
-   ═════════════════════════════════════════════════════════════════════════ */
-function adminSetPlan(array $b): void {
-    verifyAdmin($b);
-    $uid   = trim($b['targetUid'] ?? '');
-    $plan  = trim($b['plan']      ?? 'free');
-    $limit = intval($b['teamLimit'] ?? 10);
-    if (!$uid) jsonErr('Missing targetUid', 400);
-    fbUpdate("users/$uid", ['plan'=>$plan, 'teamLimit'=>$limit, 'planSetAt'=>date('c')]);
-    jsonOut(['success'=>true]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN: get_users — returns all users from Firebase
-   Body: { adminSecret }
-   ═════════════════════════════════════════════════════════════════════════ */
-function adminGetUsers(array $b): void {
-    verifyAdmin($b);
-    $tok = fbToken();
-    $url = FIREBASE_DB_URL . '/users.json'
-         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
-    $headers = [];
-    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
-    $data = curlRequest('GET', $url, null, $headers);
-    jsonOut(['success'=>true, 'users'=>$data]);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   ADMIN: get_leads — returns contact form submissions
-   ═════════════════════════════════════════════════════════════════════════ */
-function adminGetLeads(array $b): void {
-    verifyAdmin($b);
-    $tok = fbToken();
-    $url = FIREBASE_DB_URL . '/leads.json'
-         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
-    $headers = [];
-    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
-    $data = curlRequest('GET', $url, null, $headers);
-    jsonOut(['success'=>true, 'leads'=>$data]);
-}
-
-
-   ═════════════════════════════════════════════════════════════════════════ */
-function fbToken(): string {
-    // Use a cached token stored in /tmp for up to 55 minutes
-    $cache = sys_get_temp_dir() . '/ytinsight_fb_token.json';
-    if (file_exists($cache)) {
-        $c = json_decode(file_get_contents($cache), true);
-        if (!empty($c['token']) && !empty($c['exp']) && $c['exp'] > time() + 60) {
-            return $c['token'];
-        }
-    }
-
-    // Generate JWT for service account
-    if (!file_exists(FIREBASE_SA_PATH)) {
-        // Fallback: use the public web API key for unauthenticated writes (less secure)
-        return '__WEB_KEY__';
-    }
-    $sa    = json_decode(file_get_contents(FIREBASE_SA_PATH), true);
-    $now   = time();
-    $claim = [
-        'iss'   => $sa['client_email'],
-        'sub'   => $sa['client_email'],
-        'aud'   => 'https://oauth2.googleapis.com/token',
-        'iat'   => $now,
-        'exp'   => $now + 3600,
-        'scope' => 'https://www.googleapis.com/auth/firebase https://www.googleapis.com/auth/cloud-platform',
-    ];
-    $jwt   = jwtSign($claim, $sa['private_key']);
-    $res   = curlPost('https://oauth2.googleapis.com/token', [
-        'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        'assertion'  => $jwt,
-    ]);
-    $tok = $res['access_token'] ?? '';
-    file_put_contents($cache, json_encode(['token'=>$tok,'exp'=>$now+3600]));
-    return $tok;
-}
-
-function fbSet(string $path, array $data): void {
-    $tok = fbToken();
-    $url = FIREBASE_DB_URL . '/' . ltrim($path,'/') . '.json'
-         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
-    $headers = ['Content-Type: application/json'];
-    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
-    curlRequest('PUT', $url, json_encode($data), $headers);
-}
-
-function fbUpdate(string $path, array $data): void {
-    $tok = fbToken();
-    $url = FIREBASE_DB_URL . '/' . ltrim($path,'/') . '.json'
-         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
-    $headers = ['Content-Type: application/json'];
-    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
-    curlRequest('PATCH', $url, json_encode($data), $headers);
-}
-
-function fbDelete(string $path): void {
-    $tok = fbToken();
-    $url = FIREBASE_DB_URL . '/' . ltrim($path,'/') . '.json'
-         . ($tok === '__WEB_KEY__' ? '?auth=' . FIREBASE_WEB_API_KEY : '');
-    $headers = [];
-    if ($tok !== '__WEB_KEY__') $headers[] = 'Authorization: Bearer ' . $tok;
-    curlRequest('DELETE', $url, null, $headers);
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   JWT HELPER (RS256)
-   ═════════════════════════════════════════════════════════════════════════ */
-function jwtSign(array $payload, string $privateKey): string {
-    $header  = base64url(json_encode(['alg'=>'RS256','typ'=>'JWT']));
-    $payload = base64url(json_encode($payload));
-    $sig = '';
-    openssl_sign("$header.$payload", $sig, $privateKey, OPENSSL_ALGO_SHA256);
-    return "$header.$payload." . base64url($sig);
-}
-function base64url(string $data): string {
-    return rtrim(strtr(base64_encode($data), '+/', '-_'), '=');
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   CURL HELPERS
-   ═════════════════════════════════════════════════════════════════════════ */
-function curlGet(string $url): array {
-    return curlRequest('GET', $url);
-}
-
-function curlGetAuth(string $url, string $token): array {
-    return curlRequest('GET', $url, null, ['Authorization: Bearer ' . $token]);
-}
-
-function curlPost(string $url, array $fields): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => http_build_query($fields),
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_TIMEOUT        => 20,
-    ]);
-    $res = curl_exec($ch);
-    curl_close($ch);
-    return json_decode($res ?: '{}', true) ?? [];
-}
-
-function curlPostAuth(string $url, string $token, string $body, array $extraHeaders = [], bool $returnHeaders = false) {
-    $headers = array_merge(['Authorization: Bearer ' . $token], $extraHeaders);
-    if ($returnHeaders) {
-        // Return response headers (for resumable upload Location)
-        $headerStr = '';
-        $ch = curl_init($url);
-        curl_setopt_array($ch, [
-            CURLOPT_CUSTOMREQUEST  => 'POST',
-            CURLOPT_POSTFIELDS     => $body,
-            CURLOPT_HTTPHEADER     => $headers,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_HEADER         => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_TIMEOUT        => 30,
-        ]);
-        $raw  = curl_exec($ch);
-        $size = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
-        curl_close($ch);
-        $headerStr = substr($raw, 0, $size);
-        $result    = [];
-        foreach (explode("\r\n", $headerStr) as $line) {
-            if (strpos($line, ':') !== false) {
-                [$k,$v] = explode(':', $line, 2);
-                $result[trim($k)] = trim($v);
-            }
-        }
-        return $result;
-    }
-    return curlRequest('POST', $url, $body, $headers);
-}
-
-function curlPutRaw(string $url, string $data, string $contentType): array {
-    $ch = curl_init($url);
-    curl_setopt_array($ch, [
-        CURLOPT_CUSTOMREQUEST  => 'PUT',
-        CURLOPT_POSTFIELDS     => $data,
-        CURLOPT_HTTPHEADER     => ["Content-Type: $contentType", 'Content-Length: ' . strlen($data)],
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_TIMEOUT        => 300,
-    ]);
-    $res = curl_exec($ch);
-    curl_close($ch);
-    return json_decode($res ?: '{}', true) ?? [];
-}
-
-function curlRequest(string $method, string $url, ?string $body = null, array $headers = []): array {
-    $ch = curl_init($url);
-    $opts = [
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_SSL_VERIFYPEER => true,
-        CURLOPT_TIMEOUT        => 30,
-        CURLOPT_HTTPHEADER     => $headers,
-    ];
-    if ($method === 'GET') {
-        $opts[CURLOPT_HTTPGET] = true;
-    } else {
-        $opts[CURLOPT_CUSTOMREQUEST] = $method;
-        if ($body !== null) $opts[CURLOPT_POSTFIELDS] = $body;
-    }
-    curl_setopt_array($ch, $opts);
-    $res = curl_exec($ch);
-    $err = curl_error($ch);
-    curl_close($ch);
-    if ($err) throw new RuntimeException('cURL error: ' . $err);
-    return json_decode($res ?: '{}', true) ?? [];
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   OUTPUT HELPERS
-   ═════════════════════════════════════════════════════════════════════════ */
-function jsonOut(array $data): void { echo json_encode($data); exit; }
-function jsonErr(string $msg, int $code = 400): void {
-    http_response_code($code);
-    echo json_encode(['success'=>false,'message'=>$msg]);
+// Preflight
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(204);
     exit;
 }
+
+// ─────────────────────────────────────────────
+// Secret Verification
+// ─────────────────────────────────────────────
+$providedSecret = $_GET['secret'] ?? $_POST['secret'] ?? '';
+if ($providedSecret !== ENDPOINT_SECRET) {
+    http_response_code(403);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
+
+// ─────────────────────────────────────────────
+// Action Router
+// ─────────────────────────────────────────────
+$action = $_GET['action'] ?? $_POST['action'] ?? '';
+
+switch ($action) {
+
+    // ── Return Firebase Config for SDK initialization ──
+    case 'get_config':
+        echo json_encode([
+            'success' => true,
+            'config'  => [
+                'apiKey'            => FB_API_KEY,
+                'authDomain'        => FB_AUTH_DOMAIN,
+                'projectId'         => FB_PROJECT_ID,
+                'storageBucket'     => FB_STORAGE_BUCKET,
+                'messagingSenderId' => FB_MESSAGING_SENDER,
+                'appId'             => FB_APP_ID,
+                'databaseURL'       => FB_DATABASE_URL,
+            ]
+        ]);
+        break;
+
+    // ── Verify Firebase ID Token (server-side) ──
+    case 'verify':
+        $body    = json_decode(file_get_contents('php://input'), true);
+        $idToken = $body['idToken'] ?? '';
+        if (!$idToken) {
+            http_response_code(400);
+            echo json_encode(['error' => 'ID token missing']);
+            exit;
+        }
+
+        // Call Firebase REST API to verify token
+        $url = 'https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=' . FB_API_KEY;
+        $ch  = curl_init($url);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode(['idToken' => $idToken]));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+
+        if ($httpCode === 200 && isset($result['users'][0])) {
+            $user = $result['users'][0];
+            echo json_encode([
+                'success' => true,
+                'uid'     => $user['localId'],
+                'email'   => $user['email'] ?? '',
+                'name'    => $user['displayName'] ?? '',
+            ]);
+        } else {
+            http_response_code(401);
+            echo json_encode(['error' => 'Invalid token', 'detail' => $result]);
+        }
+        break;
+
+    // ── Log user activity to Firebase RTDB ──
+    case 'log_activity':
+        $body  = json_decode(file_get_contents('php://input'), true);
+        $uid   = preg_replace('/[^a-zA-Z0-9_-]/', '', $body['uid'] ?? '');
+        $event = $body['event'] ?? 'unknown';
+        $meta  = $body['meta'] ?? [];
+
+        if (!$uid) {
+            http_response_code(400);
+            echo json_encode(['error' => 'UID required']);
+            exit;
+        }
+
+        $timestamp = date('c'); // ISO 8601
+        $logEntry  = [
+            'event'     => htmlspecialchars($event),
+            'timestamp' => $timestamp,
+            'meta'      => $meta,
+        ];
+
+        // Write to Firebase RTDB via REST
+        $rtdbUrl = FB_DATABASE_URL . '/users/' . $uid . '/activity/' . time() . '.json?auth=' . FB_SERVER_KEY;
+        $ch = curl_init($rtdbUrl);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, 'PUT');
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($logEntry));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($httpCode === 200) {
+            echo json_encode(['success' => true, 'logged' => $event]);
+        } else {
+            http_response_code(500);
+            echo json_encode(['error' => 'RTDB write failed', 'http' => $httpCode]);
+        }
+        break;
+
+    default:
+        http_response_code(400);
+        echo json_encode(['error' => 'Invalid action. Use: get_config, verify, log_activity']);
+}
+?>
