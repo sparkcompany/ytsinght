@@ -1177,6 +1177,9 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
 // Yeh values config.php ke saath match honi chahiyein
 // Security ke liye: config.php se fetch karein (neeche commented example hai)
 
+// ═══ FIREBASE CONFIG ═══
+// Apni Firebase project ki values yahan daalein
+// Firebase Console → Project Settings → General → Your apps
  const firebaseConfig = {
   apiKey: "AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I",
   authDomain: "insight-4264d.firebaseapp.com",
@@ -1186,19 +1189,6 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
   messagingSenderId: "349243473589",
   appId: "1:349243473589:web:d7169e82d1129aa23cc8fc"
 };
-
-// ALTERNATIVE: config.php se secure fetch (recommended for production):
-// async function initFirebase() {
-//   const res = await fetch('config.php?action=get_config&secret=ytinsight_secret_2025_xyz');
-//   const d = await res.json();
-//   firebase.initializeApp(d.config);
-//   setupAuth();
-// }
-// initFirebase();
-
-firebase.initializeApp(FIREBASE_CONFIG);
-const auth = firebase.auth();
-const db   = firebase.database();
 
 // ═══ STATE ═══
 const STATE = {
@@ -1213,18 +1203,42 @@ const STATE = {
   theme: 'dark'
 };
 
-// ═══ AUTH LISTENER ═══
-auth.onAuthStateChanged(user => {
-  if (user) {
-    STATE.currentUser = user;
-    showApp(user);
-    loadKeys();
-    logActivity('session_start', { agent: navigator.userAgent });
-  } else {
-    STATE.currentUser = null;
-    showLanding();
+// ═══ FIREBASE — window scope variables (initialized below) ═══
+let auth = null;
+let db   = null;
+
+// ═══ INIT — runs after DOM is ready ═══
+(function initApp() {
+  // 1. Firebase initialize
+  try {
+    if (!firebase.apps.length) {
+      firebase.initializeApp(FIREBASE_CONFIG);
+    }
+    auth = firebase.auth();
+    db   = firebase.database();
+
+    // 2. Google Auth provider — set language to Urdu/English
+    auth.languageCode = 'en';
+
+    // 3. Auth state listener
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        STATE.currentUser = user;
+        showApp(user);
+        loadKeys();
+        logActivity('session_start', { agent: navigator.userAgent });
+      } else {
+        STATE.currentUser = null;
+        showLanding();
+      }
+    });
+
+  } catch(e) {
+    console.error('Firebase init error:', e);
+    // Show friendly error if config is wrong
+    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;font-family:sans-serif;color:#f0eaff;background:#08060f"><div style="font-size:2rem">⚠️</div><div style="font-size:16px;font-weight:600">Firebase Configuration Error</div><div style="font-size:13px;color:#7a6aaa;max-width:360px;text-align:center">FIREBASE_CONFIG mein apni project ki values daalein. Firebase Console → Project Settings → General</div></div>';
   }
-});
+})();
 
 function showApp(user) {
   document.getElementById('landing-page').style.display = 'none';
@@ -1321,12 +1335,14 @@ async function doSignup() {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
     await cred.user.updateProfile({ displayName: name });
     // Save user to Realtime DB
-    await db.ref('users/' + cred.user.uid + '/profile').set({
-      name:      name,
-      email:     email,
-      createdAt: new Date().toISOString(),
-      plan:      'free'
-    });
+    if (db) {
+      await db.ref('users/' + cred.user.uid + '/profile').set({
+        name:      name,
+        email:     email,
+        createdAt: new Date().toISOString(),
+        plan:      'free'
+      });
+    }
     toast('Account ban gaya! YTInsight mein khush aamdeed 🎉', 'success');
   } catch(e) {
     const msgs = {
@@ -1344,26 +1360,67 @@ async function doSignup() {
 // ─── Google Sign In ───
 async function doGoogleSignIn() {
   clearAuthError();
+  if (!auth) { showAuthError('Firebase initialize nahi hua. Page refresh karein.'); return; }
+
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
-    const result   = await auth.signInWithPopup(provider);
+    // Extra scopes for better profile info
+    provider.addScope('profile');
+    provider.addScope('email');
+    // Force account selection every time
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    let result;
+    try {
+      // Try popup first
+      result = await auth.signInWithPopup(provider);
+    } catch(popupErr) {
+      // If popup blocked, fallback to redirect
+      if (popupErr.code === 'auth/popup-blocked') {
+        showAuthError('Popup block ho gaya. Redirect se try kar raha hai...');
+        await auth.signInWithRedirect(provider);
+        return; // redirect will reload page
+      }
+      // User closed popup — silent, no error
+      if (popupErr.code === 'auth/popup-closed-by-user' ||
+          popupErr.code === 'auth/cancelled-popup-request') {
+        return;
+      }
+      throw popupErr; // rethrow other errors
+    }
+
     // Save/update profile in RTDB
     const u = result.user;
-    await db.ref('users/' + u.uid + '/profile').update({
-      name:    u.displayName || '',
-      email:   u.email || '',
-      photo:   u.photoURL || '',
-      lastLogin: new Date().toISOString()
-    });
+    if (db) {
+      await db.ref('users/' + u.uid + '/profile').update({
+        name:      u.displayName || '',
+        email:     u.email || '',
+        photo:     u.photoURL || '',
+        lastLogin: new Date().toISOString(),
+        provider:  'google'
+      });
+    }
     toast('Google se login ho gaye! 👋', 'success');
+
   } catch(e) {
-    if (e.code !== 'auth/popup-closed-by-user') showAuthError('Google login fail. Dobara try karein.');
+    console.error('Google Sign-in error:', e);
+    const googleErrors = {
+      'auth/network-request-failed':     'Internet connection check karein',
+      'auth/user-disabled':              'Yeh account disable hai',
+      'auth/account-exists-with-different-credential': 'Yeh email kisi aur method se registered hai',
+      'auth/invalid-api-key':            'Firebase API key galat hai — config check karein',
+      'auth/app-not-authorized':         'Yeh domain Firebase mein authorized nahi. Console mein add karein.',
+      'auth/unauthorized-domain':        'Domain authorized nahi. Firebase Console → Authentication → Settings → Authorized domains mein add karein.',
+      'auth/operation-not-allowed':      'Google Sign-in enable nahi. Firebase Console → Authentication → Sign-in Methods mein Google enable karein.',
+    };
+    showAuthError(googleErrors[e.code] || ('Error: ' + (e.message || e.code || 'Unknown error')));
   }
 }
 
 // ─── Logout ───
 async function doLogout() {
   if (!confirm('Logout karna chahte hain?')) return;
+  if (!auth) return;
   await auth.signOut();
   toast('Logout ho gaye', 'info');
   STATE.history = [];
@@ -1372,7 +1429,7 @@ async function doLogout() {
 
 // ═══ FIREBASE ACTIVITY LOGGER ═══
 async function logActivity(event, meta = {}) {
-  if (!STATE.currentUser) return;
+  if (!STATE.currentUser || !db) return;
   try {
     const uid = STATE.currentUser.uid;
     await db.ref('users/' + uid + '/activity').push({
@@ -1772,7 +1829,7 @@ function addToHistory(type, input, data) {
   if (STATE.history.length > 20) STATE.history.pop();
   updateHomeRecent();
   // Save to Firebase RTDB
-  if (STATE.currentUser) {
+  if (STATE.currentUser && db) {
     db.ref('users/' + STATE.currentUser.uid + '/history').push({
       type, input: item.input, title: item.title, time: item.time, model: STATE.model
     }).catch(()=>{});
