@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,16 +13,44 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css">
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 
 <style>
 /* ═══════════════════════════════════════════
    CSS VARIABLES
 ═══════════════════════════════════════════ */
+/* ── LIGHT MODE (default) ── */
 :root {
+  --bg: #f8f6ff;
+  --bg2: #ffffff;
+  --bg3: #f0ecff;
+  --surface: #ffffff;
+  --surface2: #f3f0ff;
+  --border: rgba(120,80,220,0.15);
+  --border2: rgba(120,80,220,0.3);
+  --text: #0d0a1a;
+  --text2: #4a3f6b;
+  --text3: #8b7aab;
+  --purple: #7c3aed;
+  --purple2: #6d28d9;
+  --purple3: #5b21b6;
+  --purple-light: #ede9fe;
+  --purple-mid: #c4b5fd;
+  --accent: #7c3aed;
+  --red: #ef4444;
+  --green: #059669;
+  --amber: #d97706;
+  --shadow: 0 4px 24px rgba(124,58,237,0.08);
+  --shadow2: 0 8px 40px rgba(124,58,237,0.15);
+  --radius: 14px;
+  --radius2: 8px;
+  --radius3: 20px;
+  --transition: all 0.2s ease;
+  --font-display: 'Space Grotesk', sans-serif;
+  --font-body: 'Inter', sans-serif;
+}
+
+/* ── DARK MODE ── */
+[data-theme="dark"] {
   --bg: #08060f;
   --bg2: #100c1e;
   --bg3: #160e2a;
@@ -33,39 +61,13 @@
   --text: #f0eaff;
   --text2: #c4aff0;
   --text3: #7a6aaa;
-  --purple: #7c3aed;
-  --purple2: #6d28d9;
-  --purple3: #5b21b6;
   --purple-light: #1e1540;
   --purple-mid: #4c3494;
   --accent: #a855f7;
-  --red: #ef4444;
   --green: #10b981;
   --amber: #f59e0b;
   --shadow: 0 4px 24px rgba(0,0,0,0.4);
   --shadow2: 0 8px 40px rgba(0,0,0,0.6);
-  --radius: 14px;
-  --radius2: 8px;
-  --radius3: 20px;
-  --transition: all 0.2s ease;
-  --font-display: 'Space Grotesk', sans-serif;
-  --font-body: 'Inter', sans-serif;
-}
-[data-theme="light"] {
-  --bg: #ffffff;
-  --bg2: #f8f6ff;
-  --bg3: #f0ecff;
-  --surface: #ffffff;
-  --surface2: #f8f6ff;
-  --border: rgba(120,80,220,0.15);
-  --border2: rgba(120,80,220,0.3);
-  --text: #0d0a1a;
-  --text2: #4a3f6b;
-  --text3: #8b7aab;
-  --purple-light: #ede9fe;
-  --purple-mid: #c4b5fd;
-  --shadow: 0 4px 24px rgba(124,58,237,0.08);
-  --shadow2: 0 8px 40px rgba(124,58,237,0.15);
 }
 
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
@@ -90,8 +92,8 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
 #app-page{display:none}
 
 /* ── Landing Nav ── */
-.lp-nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;gap:1rem;background:rgba(8,6,15,0.85);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
-[data-theme="light"] .lp-nav{background:rgba(255,255,255,0.9)}
+.lp-nav{position:fixed;top:0;left:0;right:0;z-index:200;height:68px;display:flex;align-items:center;padding:0 2rem;justify-content:space-between;gap:1rem;background:rgba(248,246,255,0.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-bottom:1px solid var(--border)}
+[data-theme="dark"] .lp-nav{background:rgba(8,6,15,0.88)}
 .lp-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
 .lp-logo-icon{width:38px;height:38px;background:linear-gradient(135deg,var(--purple),var(--accent));border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .lp-logo-icon i{color:#fff;font-size:22px}
@@ -452,9 +454,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
       <a href="#about" class="lp-nav-link">About</a>
     </div>
     <div class="lp-nav-actions">
-      <button class="btn-icon" onclick="toggleTheme()" title="Toggle Theme" id="lpThemeBtn">
-        <i class="ti ti-moon"></i>
-      </button>
+      <button class="btn-icon" onclick="toggleTheme()" title="Toggle Theme" id="lpThemeBtn"><i class="ti ti-moon" id="lpThemeIcon"></i></button>
       <button class="btn-secondary" onclick="openAuth('login')">Login</button>
       <button class="btn-primary" onclick="openAuth('signup')"><i class="ti ti-sparkles"></i> Get Started</button>
     </div>
@@ -764,7 +764,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
 
       <div class="sb-section-title">Account</div>
       <button class="sb-item" id="sb-settings" onclick="showView('settings','sb-settings')"><i class="ti ti-settings"></i> <span>Settings & API Keys</span></button>
-      <button class="sb-item" onclick="toggleTheme()"><i class="ti ti-moon" id="sbThemeIcon"></i> <span>Dark Mode</span></button>
+      <button class="sb-item" onclick="toggleTheme()" id="sbThemeBtn"><i class="ti ti-moon" id="sbThemeIcon"></i> <span id="sbThemeLabel">Dark Mode</span></button>
 
       <!-- User Info -->
       <div class="sb-user">
@@ -1125,7 +1125,7 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
             <div class="settings-card">
               <div class="settings-card-title"><i class="ti ti-adjustments"></i> Preferences</div>
               <div class="pref-row">
-                <div><div class="pref-label">Dark Mode</div><div class="pref-sub">Interface ka theme</div></div>
+                <div><div class="pref-label">Dark Mode</div><div class="pref-sub">Interface ka theme switch karein</div></div>
                 <div class="toggle" id="prefDarkToggle" onclick="toggleTheme()"><div class="toggle-knob"></div></div>
               </div>
               <div class="pref-row">
@@ -1169,6 +1169,14 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
 <div class="toast-wrap" id="toastWrap"></div>
 
 <!-- ═══════════════════════════════════════════
+  FIREBASE SDK — body ke andar, app JS se pehle
+  Yeh order zaruri hai: firebase load → phir initApp()
+════════════════════════════════════════════ -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+<!-- ═══════════════════════════════════════════
   JAVASCRIPT
 ════════════════════════════════════════════ -->
 <script>
@@ -1178,16 +1186,14 @@ body{font-family:var(--font-body);background:var(--bg);color:var(--text);line-he
 // Security ke liye: config.php se fetch karein (neeche commented example hai)
 
 // ═══ FIREBASE CONFIG ═══
-// Apni Firebase project ki values yahan daalein
-// Firebase Console → Project Settings → General → Your apps
- const firebaseConfig = {
-  apiKey: "AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I",
-  authDomain: "insight-4264d.firebaseapp.com",
-  databaseURL: "https://insight-4264d-default-rtdb.firebaseio.com",
-  projectId: "insight-4264d",
-  storageBucket: "insight-4264d.firebasestorage.app",
+const FIREBASE_CONFIG = {
+  apiKey:            "AIzaSyCzZ-6KQtTbz8eAdACZ9KSYVKa0ATAAg-I",
+  authDomain:        "insight-4264d.firebaseapp.com",
+  databaseURL:       "https://insight-4264d-default-rtdb.firebaseio.com",
+  projectId:         "insight-4264d",
+  storageBucket:     "insight-4264d.firebasestorage.app",
   messagingSenderId: "349243473589",
-  appId: "1:349243473589:web:d7169e82d1129aa23cc8fc"
+  appId:             "1:349243473589:web:d7169e82d1129aa23cc8fc"
 };
 
 // ═══ STATE ═══
@@ -1207,20 +1213,16 @@ const STATE = {
 let auth = null;
 let db   = null;
 
-// ═══ INIT — runs after DOM is ready ═══
-(function initApp() {
-  // 1. Firebase initialize
+// ═══ INIT ═══
+function initApp() {
   try {
     if (!firebase.apps.length) {
       firebase.initializeApp(FIREBASE_CONFIG);
     }
     auth = firebase.auth();
     db   = firebase.database();
-
-    // 2. Google Auth provider — set language to Urdu/English
     auth.languageCode = 'en';
 
-    // 3. Auth state listener
     auth.onAuthStateChanged(user => {
       if (user) {
         STATE.currentUser = user;
@@ -1234,11 +1236,16 @@ let db   = null;
     });
 
   } catch(e) {
-    console.error('Firebase init error:', e);
-    // Show friendly error if config is wrong
-    document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;flex-direction:column;gap:1rem;font-family:sans-serif;color:#f0eaff;background:#08060f"><div style="font-size:2rem">⚠️</div><div style="font-size:16px;font-weight:600">Firebase Configuration Error</div><div style="font-size:13px;color:#7a6aaa;max-width:360px;text-align:center">FIREBASE_CONFIG mein apni project ki values daalein. Firebase Console → Project Settings → General</div></div>';
+    console.error('Firebase init error:', e.message);
+    const errDiv = document.createElement('div');
+    errDiv.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:1rem;font-family:sans-serif;background:#f8f6ff;z-index:9999;padding:2rem;text-align:center';
+    errDiv.innerHTML = '<div style="font-size:2.5rem">⚠️</div><div style="font-size:18px;font-weight:700;color:#0d0a1a">Firebase Error</div><div style="font-size:14px;color:#4a3f6b;max-width:420px">Error: ' + e.message + '</div>';
+    document.body.appendChild(errDiv);
   }
-})();
+}
+
+// ═══ INIT — Firebase scripts upar load ho chuke hain, seedha call karo ═══
+initApp();
 
 function showApp(user) {
   document.getElementById('landing-page').style.display = 'none';
@@ -1479,19 +1486,47 @@ function closeSidebar() {
   document.getElementById('sbOverlay').classList.remove('show');
 }
 
-// ═══ THEME ═══
+// ═══ THEME — Light default, Dark toggled ═══
 function toggleTheme() {
-  const isDark = document.body.dataset.theme === 'dark';
-  document.body.dataset.theme = isDark ? 'light' : 'dark';
-  STATE.theme = isDark ? 'light' : 'dark';
-  const icons = document.querySelectorAll('#sbThemeIcon,#appThemeIcon');
-  icons.forEach(i => i.className = isDark ? 'ti ti-sun' : 'ti ti-moon');
-  const lpBtn = document.getElementById('lpThemeBtn');
-  if (lpBtn) lpBtn.querySelector('i').className = isDark ? 'ti ti-sun' : 'ti ti-moon';
-  // Sync preference toggles
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  if (isDark) {
+    document.documentElement.removeAttribute('data-theme');
+    STATE.theme = 'light';
+    localStorage.setItem('yt_theme', 'light');
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    STATE.theme = 'dark';
+    localStorage.setItem('yt_theme', 'dark');
+  }
+  // Update all toggle icons/states
+  const nowDark = !isDark;
+  const iconClass = nowDark ? 'ti ti-sun' : 'ti ti-moon';
+  ['lpThemeIcon','sbThemeIcon','appThemeIcon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.className = iconClass;
+  });
+  const label = document.getElementById('sbThemeLabel');
+  if (label) label.textContent = nowDark ? 'Light Mode' : 'Dark Mode';
   const pdt = document.getElementById('prefDarkToggle');
-  if (pdt) pdt.classList.toggle('on', !isDark);
+  if (pdt) pdt.classList.toggle('on', nowDark);
 }
+
+// Apply saved theme on load
+(function applySavedTheme() {
+  const saved = localStorage.getItem('yt_theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    STATE.theme = 'dark';
+    ['lpThemeIcon','sbThemeIcon','appThemeIcon'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.className = 'ti ti-sun';
+    });
+    const label = document.getElementById('sbThemeLabel');
+    if (label) label.textContent = 'Light Mode';
+    const pdt = document.getElementById('prefDarkToggle');
+    if (pdt) pdt.classList.add('on');
+  }
+})();
 
 // ═══ LANG TOGGLE ═══
 function toggleLang() {
